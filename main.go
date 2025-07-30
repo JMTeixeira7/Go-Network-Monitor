@@ -1,26 +1,28 @@
 package main
 
 import (
-	"fmt"
+	//"fmt"
 	"applications_manager/Url"
+	"fmt"
+	"net/http"
 )
 
 func main() {
+
+	storage := Url.FileStorage{Filename: "data/urls.json"}
+
 	Url.SetTargetURLs()
-
-	urls := Url.GetTargetURLs()
-	fmt.Println("Collected URLs:")
-	for _, u := range urls {
-		fmt.Println("-", u)
+	err := storage.Save(Url.GetTargetURLs())
+	if err != nil {
+		fmt.Println("Failed to save URLs: ", err)
 	}
-		// search for open browsers
 
-		// search for open tabs inside each browser
+	urls, err := storage.Load()
+	if err != nil {
+		fmt.Println("Failed to load URLs: ", err)
+	}
 
-		// read defined target tabs
+	fmt.Println("Loaded URLs:", urls)
 
-		// shutdown tab if it is a target tab
-
-		// save the open tabs on data base every time it scans
 
 }

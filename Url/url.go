@@ -7,7 +7,15 @@ import (
 	"strings"
 )
 
-var urls []string
+type Url struct {
+	//full_name string
+	Domain string `json:"domain"`
+	Protocol string `json:"protocol"`
+	Path string `json:"path"`
+	Target bool `json:"target"`
+}
+
+var Urls []Url
 
 func SetTargetURLs(){
 		reader := bufio.NewReader(os.Stdin)
@@ -24,18 +32,20 @@ func SetTargetURLs(){
 				break
 			}
 
-			urls = append(urls, line)
+			new_url, err := createUrl(line)
+			if(err != nil) { return }
+			Urls = append(Urls, new_url)
 		}
 
-		for i, line := range urls {
-			fmt.Printf("Line %d: %s\n", i+1, line)
+		for i, url := range Urls {
+			fmt.Printf("URL %d: %s://%s/%s\n", i+1, url.Protocol, url.Domain, url.Path)
 		}
 }
 
-func GetTargetURLs() []string{
-	return urls
+func GetTargetURLs() []Url{
+	return Urls
 }
 
-func GetTargetURL(index int) string{
-	return urls[index]
+func GetTargetURL(index int) Url{
+	return Urls[index]
 }
