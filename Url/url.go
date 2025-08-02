@@ -32,7 +32,7 @@ func SetTargetURLs(){
 				break
 			}
 
-			new_url, err := createUrl(line)
+			new_url, err := CreateUrl(line)
 			if(err != nil) { return }
 			Urls = append(Urls, new_url)
 		}

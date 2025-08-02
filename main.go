@@ -26,16 +26,18 @@ func main() {
 	}
 	fmt.Println("Loaded URLs:", urls)
 
-
-	http.HandleFunc("/", SimpleRequestHandler)
+	//Multiplexer
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", SimpleRequestHandler)
-	mux.HandleFunc("/alternative", AlternativeRequestHandler)
+	mux.HandleFunc("/", DefaultRequestHandler)
+	mux.HandleFunc("/Form", FormRequestHandler)
+	mux.HandleFunc("/Body", ReadBodyRequestHandler)
+	mux.HandleFunc("/QueryStrings", QueryStringRequestHandler)
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
+	//httpServer
 	proxyServer := &http.Server{
-		Addr: "127.0.0.1:3333",
+		Addr: "127.0.0.1:4444",
 		Handler: mux,
 		BaseContext: func(l net.Listener) context.Context {
 			ctx = context.WithValue(ctx, KeyServerAddr, l.Addr().String())
@@ -43,11 +45,15 @@ func main() {
 		},
 	}
 
-	err = proxyServer.ListenAndServe()
-	if errors.Is(err, http.ErrServerClosed){
-		fmt.Println("Server is closed")
-		} else if err!=nil {
-			fmt.Println("Error while starting server: %s\n", err)
-	}
-	cancelCtx()
+	go func() {
+		err = proxyServer.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed){
+			fmt.Println("Server is closed")
+			} else if err!=nil {
+				fmt.Printf("Error while starting server: %s\n", err)
+		}
+		cancelCtx()
+	}()
+
+	<- ctx.Done() //Just to keep the program alive whilhe no behaviour exists
 }

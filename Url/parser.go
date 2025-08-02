@@ -6,7 +6,7 @@ import (
 	"net/url"
 )
 
-func createUrl(absolute_path string) (Url, error){
+func CreateUrl(absolute_path string) (Url, error){
 	parsedUrl, err :=url.Parse(absolute_path)
 	if err != nil {
 		fmt.Println("Error while parsing the url", err)
