@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"net"
 )
 
 type Url struct {
@@ -48,4 +49,15 @@ func GetTargetURLs() []Url{
 
 func GetTargetURL(index int) Url{
 	return Urls[index]
+}
+
+func GetIPAddress(url Url) net.IP {
+	fmt.Printf("this is the domain: %s\n", url.Domain)
+	ips, err := net.LookupIP(url.Domain)
+	if err != nil {
+		fmt.Printf("Error while performing DNS lookup: %s\n", err)
+		return nil
+	}
+
+	return ips[0]
 }
