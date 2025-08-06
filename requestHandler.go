@@ -22,9 +22,9 @@ func DefaultRequestHandler(w http.ResponseWriter, req *http.Request) {
 	case http.MethodPost:
 		PostHandler(w, req)
 	case http.MethodPut:
-		PutHandler(w, req)
+		//PutHandler(w, req)
 	case http.MethodDelete:
-		DeleteHandler(w, req)
+		//DeleteHandler(w, req)
 	default:
 		http.Error(w, "Method Not Supported", http.StatusMethodNotAllowed)
 	}
@@ -46,6 +46,30 @@ func GetHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	webRequest.Header = req.Header.Clone()
 
+
+	var webRes *http.Response
+	webRes, err = sendRequest(webRequest)
+	if err != nil {
+		fmt.Printf("Error while redirecting request: %s\n", err)
+		return
+	}
+	defer webRes.Body.Close()
+	for key, value := range webRes.Header {
+		for _, b := range value {
+			w.Header().Set(key, b)
+		}
+	}
+	w.WriteHeader(webRes.StatusCode)
+	io.Copy(w, webRes.Body)
+}
+
+func PostHandler(w http.ResponseWriter, req *http.Request) {
+	webRequest, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
+	if err != nil {
+		fmt.Printf("Could not create new request: %s", err)
+		return
+	}
+	webRequest.Header = req.Header.Clone()
 
 	var webRes *http.Response
 	webRes, err = sendRequest(webRequest)
@@ -135,10 +159,11 @@ func searchTargetURL(ctx context.Context, req *http.Request) error {
 	}
 	for _, target := range Url.Urls {
 		if !target.Target {
-			break
+			continue
 		}
 		if url.Domain == target.Domain {
 			fmt.Printf("%s: Requested Url is targetted: %s\n", ctx.Value(KeyServerAddr), url.Domain)
+			err = &TargetUrlError{url: req.RequestURI, domain: target.Domain}
 		}
 	}
 	return err

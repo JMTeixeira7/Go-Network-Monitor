@@ -14,8 +14,7 @@ func main() {
 
 	storage := Url.FileStorage{Filename: "data/urls.json"}
 
-	Url.SetTargetURLs()
-	err := storage.Save(Url.GetTargetURLs())
+	err := storage.Set()
 	if err != nil {
 		fmt.Println("Failed to save URLs: ", err)
 	}

@@ -18,7 +18,7 @@ func (f FileStorage) Load() ([]Url, error) {
 	data, err := os.ReadFile(f.Filename)
 
 	if (err != nil) {
-		if os.IsNotExist(err) {				// file doesnt exist
+		if os.IsNotExist(err) {	// file doesnt exist
 			return []Url{}, nil
 		}
 		return nil, err
@@ -34,6 +34,15 @@ func (f FileStorage) Load() ([]Url, error) {
 
 func (f FileStorage) Save(urls []Url) error {
 	data, err := json.MarshalIndent(urls, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(f.Filename, data, 0644) //premission R/W, user R only
+}
+
+func (f FileStorage) Set() error {
+	SetTargetURLs()
+	data, err := json.MarshalIndent(GetTargetURLs(), "", "  ")
 	if err != nil {
 		return err
 	}
