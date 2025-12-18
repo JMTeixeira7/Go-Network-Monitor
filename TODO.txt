@@ -1,0 +1,13 @@
+TODO:
+
+-create more auxiliar functions
+-create different handlers(POST, GET, PUT, DELETE)
+
+
+
+Non-Functional Requirements:
+-User should be able to label URL's as targeted
+-User should be able to add/remove URL's from list
+-App should store the history of the last 100 URL's accessed
+
+
