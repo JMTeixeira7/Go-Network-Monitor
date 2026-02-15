@@ -1,4 +1,4 @@
-package handler
+package httplistener
 
 import (
 	"context"
@@ -13,32 +13,25 @@ import (
 	urlerr "github.com/JMTeixeira7/Go-Network-Monitor.git/internal/url_error"
 )
 
-
-const KeyServerAddr = "ServerAdress"
-const max_t = 10
-
-func DefaultRequestHandler(w http.ResponseWriter, req *http.Request) {
-	switch req.Method {
-	case http.MethodGet:
-		GetHandler(w, req)
-	case http.MethodPost:
-		PostHandler(w, req)
-	case http.MethodPut:
-		//PutHandler(w, req)
-	case http.MethodDelete:
-		//DeleteHandler(w, req)
-	default:
-		http.Error(w, "Method Not Supported", http.StatusMethodNotAllowed)
-	}
+type ProxyHandler struct {
+    Inspector Inspector
 }
 
-func GetHandler(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
+const max_t = 10
 
-	err := searchTargetURL(ctx, req)
-	if err != nil {
-		return
-	}
+func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+    switch req.Method {
+    case http.MethodGet:
+        h.GetHandler(w, req)
+    case http.MethodPost:
+        h.PostHandler(w, req)
+    default:
+        http.Error(w, "Method Not Supported", http.StatusMethodNotAllowed)
+    }
+}
+
+func (h *ProxyHandler) GetHandler(w http.ResponseWriter, req *http.Request) {
+	//ctx := req.Context()
 
 	var body io.Reader	//ignores body in GET method even if it exists
 	webRequest, err := http.NewRequest(req.Method, req.URL.String(), body)
@@ -48,6 +41,10 @@ func GetHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	webRequest.Header = req.Header.Clone()
 
+	//TODO: check if visited in the last minute
+		//send to controller for scan
+	
+	
 
 	var webRes *http.Response
 	webRes, err = sendRequest(webRequest)
@@ -55,6 +52,9 @@ func GetHandler(w http.ResponseWriter, req *http.Request) {
 		fmt.Printf("Error while redirecting request: %s\n", err)
 		return
 	}
+
+	//TODO: assyncrounly add to the recently visited (last minute)
+
 	defer webRes.Body.Close()
 	for key, value := range webRes.Header {
 		for _, b := range value {
@@ -65,7 +65,7 @@ func GetHandler(w http.ResponseWriter, req *http.Request) {
 	io.Copy(w, webRes.Body)
 }
 
-func PostHandler(w http.ResponseWriter, req *http.Request) {
+func (h *ProxyHandler) PostHandler(w http.ResponseWriter, req *http.Request) {
 	webRequest, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
 	if err != nil {
 		fmt.Printf("Could not create new request: %s", err)
@@ -73,12 +73,15 @@ func PostHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	webRequest.Header = req.Header.Clone()
 
+	//TODO: phishing + XSS scan
+
 	var webRes *http.Response
 	webRes, err = sendRequest(webRequest)
 	if err != nil {
 		fmt.Printf("Error while redirecting request: %s\n", err)
 		return
 	}
+	
 	defer webRes.Body.Close()
 	for key, value := range webRes.Header {
 		for _, b := range value {
@@ -87,38 +90,6 @@ func PostHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	w.WriteHeader(webRes.StatusCode)
 	io.Copy(w, webRes.Body)
-}
-
-
-func FormRequestHandler(w http.ResponseWriter, req *http.Request) {
-	//read form data
-	myInstitution := req.PostFormValue("myInstitution")
-	if myInstitution == "" {
-		w.Header().Set("x-missing-field", "myInstitution")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	io.WriteString(w, fmt.Sprintf("This is your institution, %s\n", myInstitution))
-}
-
-func QueryStringRequestHandler(w http.ResponseWriter, req *http.Request) {
-	//get the URL query strings
-	hasName := req.URL.Query().Has("name")
-	name := req.URL.Query().Get("name")
-	hasNumber := req.URL.Query().Has("number")
-	number := req.URL.Query().Get("number")
-	
-	io.WriteString(w, fmt.Sprintf("QueryString has:\n Name(%t): %s\n Number(%t): %s\n", hasName, name, hasNumber, number))
-}
-
-func ReadBodyRequestHandler(w http.ResponseWriter, req *http.Request) {
-	//read request body
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		fmt.Printf("Server could not read the body: %s\n", err)
-	}
-	
-	io.WriteString(w, fmt.Sprintf("This is the body of the Request, %s\n", body))
 }
 
 
