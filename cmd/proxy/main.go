@@ -10,12 +10,13 @@ import (
 
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/handler"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/storage"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller"
+
 )
 
 func main() {
-
 	storage := storage.FileStorage{Filename: "data/urls.json"}
-
+	controller.displayOperations()
 	urls, err := storage.LoadAll()
 	if err != nil {
 		fmt.Println("Failed to load URLs: ", err)
@@ -24,10 +25,11 @@ func main() {
 
 	//Multiplexer
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handler.DefaultRequestHandler)
 	mux.HandleFunc("/Form", handler.FormRequestHandler)
 	mux.HandleFunc("/Body", handler.ReadBodyRequestHandler)
 	mux.HandleFunc("/QueryStrings", handler.QueryStringRequestHandler)
+	mux.HandleFunc("/", handler.DefaultRequestHandler)
+
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 

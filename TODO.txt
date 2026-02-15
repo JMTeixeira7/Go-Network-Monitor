@@ -1,13 +1,22 @@
 TODO:
 
--create more auxiliar functions
--create different handlers(POST, GET, PUT, DELETE)
-
-
-
 Non-Functional Requirements:
--User should be able to label URL's as targeted
--User should be able to add/remove URL's from list
--App should store the history of the last 100 URL's accessed
+-User should be able to label URL's as blocked
+-User should be able to declare Urls as Typosquatting
+-User should be able to declare Url as Phishing
+-There should be an schedule system for blocked URL
+-THe schedule system is customize by User
+
+-Passive Scanning can be stoped or initiated by User
+-Passive Scanning:
+    -scans for Phishing
+    -scans for Typosquatting
+    -scans for blocked domains
+    -scans for XSS basic threats
+
+
+
+Not yet explored FEATURES:
+-CSP's integration
 
 
