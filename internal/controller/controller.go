@@ -1,59 +1,86 @@
 package controller
 
 import (
-	"fmt"
 	"bufio"
 	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httpListener"
 )
 
-func displayOperations() {
-    reader := bufio.NewReader(os.Stdin)
+type Controller struct {
+	// add shared state here later (db, caches, rules, etc.)
+}
 
-    var shutdown func(context.Context) error
-    serverRunning := false
 
-    for {
-        fmt.Printf(
-            "<1> Passive Scan of Network\n"+
-                "<2> Write block URL's\n"+
-                "<3> Read blocked URL's\n"+
-                "<4> Get History of Visited Domain\n"+
-                "<5> Stop HTTP Server\n",
-        )
+func New() *Controller {
+	return &Controller{}
+}
 
-        line, err := reader.ReadString('\n')
-        if err != nil {
-            return
-        }
+func (c *Controller) DisplayOperations() {
+	reader := bufio.NewReader(os.Stdin)
 
-        choice := strings.TrimSpace(line)
+	var shutdown func(context.Context) error
+	serverRunning := false
 
-        switch choice {
-        case "1":
-            if serverRunning {
-                fmt.Println("Server already running.")
-                continue
-            }
-            // ctrl implements httplistener.Inspector
-            shutdown, _ = httplistener.scanHttpNetwork(ctrl)
-            serverRunning = true
-            fmt.Println("Server started on 127.0.0.1:4444")
+	for {
+		fmt.Printf(
+			"<1> Passive Scan of Network\n" +
+				"<2> Write block URL's\n" +
+				"<3> Read blocked URL's\n" +
+				"<4> Get History of Visited Domain\n" +
+				"<5> Stop HTTP Server\n",
+		)
 
-        case "5":
-            if !serverRunning {
-                fmt.Println("Server not running.")
-                continue
-            }
-            ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-            _ = shutdown(ctx)
-            cancel()
-            serverRunning = false
-            fmt.Println("Server stopped.")
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		choice := strings.TrimSpace(line)
 
-        default:
-            fmt.Println("Not implemented yet.")
-        }
-    }
+		switch choice {
+		case "1":
+			if serverRunning {
+				fmt.Println("Server already running.")
+				continue
+			}
+
+			// c is the controller instance (the "ctrl" you were missing)
+			shutdown, err = httplistener.ScanHTTPNetwork(c)
+			if err != nil {
+				fmt.Println("Failed to start server:", err)
+				continue
+			}
+			serverRunning = true
+			fmt.Println("Server started on 127.0.0.1:4444")
+
+		case "5":
+			if !serverRunning {
+				fmt.Println("Server not running.")
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = shutdown(ctx)
+			cancel()
+			serverRunning = false
+			fmt.Println("Server stopped.")
+
+		default:
+			fmt.Println("Not implemented yet.")
+		}
+	}
+}
+
+// InspectGET implements httplistener.Inspector.
+func (c *Controller) InspectGET(r *http.Request) (block bool, reason string) {
+	panic("unimplemented")
+}
+
+// InspectPOST implements httplistener.Inspector.
+func (c *Controller) InspectPOST(r *http.Request, bodyPreview []byte) (block bool, reason string) {
+	panic("unimplemented")
 }

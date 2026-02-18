@@ -13,8 +13,6 @@ const KeyServerAddr = "ServerAdress"
 type Inspector interface {
     InspectGET(r *http.Request) (block bool, reason string)
     InspectPOST(r *http.Request, bodyPreview []byte) (block bool, reason string)
-    SeenRecently(host string) bool
-    MarkSeen(host string)
 }
 
 
