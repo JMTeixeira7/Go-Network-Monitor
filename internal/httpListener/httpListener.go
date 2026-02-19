@@ -11,8 +11,8 @@ import (
 const KeyServerAddr = "ServerAdress"
 
 type Inspector interface {
-    InspectGET(r *http.Request) (block bool, reason string)
-    InspectPOST(r *http.Request, bodyPreview []byte) (block bool, reason string)
+    InspectGET(req *http.Request) (res bool, reason string)
+    InspectPOST(req *http.Request) (res bool, reason string)
 }
 
 

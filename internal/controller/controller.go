@@ -10,15 +10,25 @@ import (
 	"time"
 
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httpListener"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/blockURL"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/typosquatting"
+
 )
 
 type Controller struct {
-	// add shared state here later (db, caches, rules, etc.)
+    Scans []Scan
+}
+
+type Scan interface {
+    Scan(r *http.Request) (res bool, reasons []string)
 }
 
 
 func New() *Controller {
-	return &Controller{}
+    scans := make([]Scan, 0, 2) //for now 2
+    scans = append(scans, blockURL.New())
+    scans = append(scans, typosquatting.New())
+    return &Controller{Scans: scans}
 }
 
 func (c *Controller) DisplayOperations() {
@@ -48,8 +58,6 @@ func (c *Controller) DisplayOperations() {
 				fmt.Println("Server already running.")
 				continue
 			}
-
-			// c is the controller instance (the "ctrl" you were missing)
 			shutdown, err = httplistener.ScanHTTPNetwork(c)
 			if err != nil {
 				fmt.Println("Failed to start server:", err)
@@ -76,11 +84,24 @@ func (c *Controller) DisplayOperations() {
 }
 
 // InspectGET implements httplistener.Inspector.
-func (c *Controller) InspectGET(r *http.Request) (block bool, reason string) {
-	panic("unimplemented")
+func (c *Controller) InspectGET(req *http.Request) (res bool, reason string) {
+   	var reasons []string
+	res = true
+    for _, s := range c.Scans {
+        block, rs := s.Scan(req)
+        reasons = append(reasons, rs...)
+		if !block{
+			res = false
+		}
+    }
+    return res, parseMsg(reasons)
 }
 
 // InspectPOST implements httplistener.Inspector.
-func (c *Controller) InspectPOST(r *http.Request, bodyPreview []byte) (block bool, reason string) {
+func (c *Controller) InspectPOST(req *http.Request) (res bool, reason string) {
 	panic("unimplemented")
+}
+
+func parseMsg(reasons []string) (msg string) {
+	panic("not implemented")
 }
