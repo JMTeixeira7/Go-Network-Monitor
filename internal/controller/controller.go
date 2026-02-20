@@ -25,9 +25,9 @@ type Scan interface {
 
 
 func New() *Controller {
-    scans := make([]Scan, 0, 2) //for now 2
-    scans = append(scans, blockURL.New())
-    scans = append(scans, typosquatting.New())
+    scans := make([]Scan, 0, 4)
+    scans = append(scans, blockURL.New())	//TODO: inject database service hear
+    scans = append(scans, typosquatting.New())	//TODO: inject database service hear
     return &Controller{Scans: scans}
 }
 
