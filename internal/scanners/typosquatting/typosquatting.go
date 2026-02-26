@@ -36,7 +36,8 @@ func New(db_service TyposquattingDBService) *Typosquatting {
 	checks = append(checks, NewSwitchCharacterCheck()) 
 	return &Typosquatting{
 		db_service: db_service,
-		Checks:     checks}
+		Checks:     checks,
+	}
 }
 
 func (t *Typosquatting) Scan(req *http.Request) (res bool, reasons []string) {

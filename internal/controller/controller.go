@@ -11,8 +11,9 @@ import (
 
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httpListener"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/blockURL"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/phishingPrevention"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/typosquatting"
-
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/xssPrevention"
 )
 
 type Controller struct {
@@ -26,8 +27,7 @@ type Scan interface {
 
 func New() *Controller {
     scans := make([]Scan, 0, 4)
-    scans = append(scans, blockURL.New())	//TODO: inject database service hear
-    scans = append(scans, typosquatting.New())	//TODO: inject database service hear
+    scans = append(scans, xssprevention.New(), blockURL.New(/*service*/), typosquatting.New(/*db_service*/), phishingPrevention.New(/*serice*/))	//TODO: inject database service hear
     return &Controller{Scans: scans}
 }
 
