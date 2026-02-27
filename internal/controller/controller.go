@@ -26,8 +26,8 @@ type Scan interface {
 
 
 func New() *Controller {
-    scans := make([]Scan, 0, 4)
-    scans = append(scans, xssprevention.New(), blockURL.New(/*service*/), typosquatting.New(/*db_service*/), phishingPrevention.New(/*serice*/))	//TODO: inject database service hear
+    scans := make([]Scan, 0, 5)
+    scans = append(scans, xssprevention.New(), blockURL.New(/*service*/), typosquatting.New(/*db_service*/), phishingPrevention.New(/*db_service*/))	//TODO: inject database service hear
     return &Controller{Scans: scans}
 }
 

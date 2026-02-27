@@ -5,6 +5,6 @@ import (
 )
 
 func main() {
-    ctrl := controller.New()
+    ctrl := controller.New(fp)
     ctrl.DisplayOperations() // blocks here
 }

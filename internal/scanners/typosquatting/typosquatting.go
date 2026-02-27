@@ -45,13 +45,12 @@ func (t *Typosquatting) Scan(req *http.Request) (res bool, reasons []string) {
 	visitedDomains, err := t.db_service.GetVisitedDomains(ctx)
 	if err != nil {
 		fmt.Printf("Error while pulling visited domains from database: %s\n", err)
-		return true, nil
+		return false, nil
 	}
 
 	err = t.db_service.PushDomain(ctx, req.URL.Hostname())
 	if err != nil {
 		fmt.Printf("Error while pushing current request to database: %s\n", err)
-		return true, nil
 	}
 
 	for i := 0; i < len(visitedDomains); i++ {

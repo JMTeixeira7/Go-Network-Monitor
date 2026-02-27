@@ -18,8 +18,8 @@ func New() *XSSPrevent {
 	}
 }
 
-func (x *XSSPrevent) Scan(r *http.Request) (bool, []string) {
-	q := r.URL.Query()
+func (x *XSSPrevent) Scan(req *http.Request) (bool, []string) {
+	q := req.URL.Query()
 	for key, vals := range q {
 		for _, v := range vals {
 			if x.policy.Sanitize(v) != v {
