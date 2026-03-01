@@ -14,9 +14,18 @@ Non-Functional Requirements:
     -scans for blocked domains
     -scans for XSS basic threats
 
-
-
 Not yet explored FEATURES:
 -CSP's integration
+
+Basic MySQL instructions:
+- docker run --name=mysql1 -d mysql/mysql-server:(tag)
+
+- docker ps
+
+- docker logs mysql1 2>&1 | grep GENERATED
+
+- docker exec -it mysql1 mysql -uroot -p
+
+- docker exec -it mysql1 bash
 
 

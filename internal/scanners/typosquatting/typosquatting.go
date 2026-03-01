@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService"
 )
 
-type TyposquattingDBService interface {
+type DBService interface {
 	GetVisitedDomains(ctx context.Context) ([]string, error)
 	PushDomain(ctx context.Context, domain string) error
 }
@@ -25,17 +27,17 @@ func NewFewerCharacterCheck() Check      { return fewerCharacter{} }
 func NewSwitchCharacterCheck() Check     { return switchCharacter{} }
 
 type Typosquatting struct {
-	db_service TyposquattingDBService
+	db_service DBService
 	Checks     []Check
 }
 
-func New(db_service TyposquattingDBService) *Typosquatting {
+func New(ts *databaseservice.TyposquattingDBService) *Typosquatting {
 	checks := make([]Check, 0, 3)
 	checks = append(checks, NewAdditionalCharacterCheck())
 	checks = append(checks, NewFewerCharacterCheck())
 	checks = append(checks, NewSwitchCharacterCheck()) 
 	return &Typosquatting{
-		db_service: db_service,
+		db_service: ts,
 		Checks:     checks,
 	}
 }

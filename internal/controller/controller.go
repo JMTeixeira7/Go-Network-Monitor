@@ -3,12 +3,14 @@ package controller
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httpListener"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/blockURL"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/phishingPrevention"
@@ -25,9 +27,12 @@ type Scan interface {
 }
 
 
-func New() *Controller {
+func New(db *sql.DB ) *Controller {
     scans := make([]Scan, 0, 5)
-    scans = append(scans, xssprevention.New(), blockURL.New(/*service*/), typosquatting.New(/*db_service*/), phishingPrevention.New(/*db_service*/))	//TODO: inject database service hear
+    scans = append(scans, xssprevention.New(),
+		blockURL.New(/*service*/),
+		typosquatting.New(databaseservice.New(db)),
+		phishingPrevention.New(/*db_service*/))	//TODO: inject database service hear
     return &Controller{Scans: scans}
 }
 
