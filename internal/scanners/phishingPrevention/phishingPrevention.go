@@ -12,7 +12,7 @@ import (
 
 type phishingDBService interface {
 	CheckForPhishing(ctx context.Context, cred model.Credentials, domain string) (bool, string, error)
-	PushCredentials(ctx context.Context, cred model.Credentials, domain string) error
+	PushCredentials(ctx context.Context, cred *model.Credentials, domain string) error
 }
 
 type PhishingPrev struct {
@@ -30,7 +30,7 @@ func New(db_service phishingDBService) *PhishingPrev{
 
 func (p *PhishingPrev) Scan(req *http.Request) (bool, []string) {
 	if req.Method == "POST" {
-		creds := inspectRequest(req)
+		creds := inspectRequest(req, p.fp_service)
 		if creds==nil {
 			return false, nil
 		}
@@ -52,7 +52,7 @@ func (p *PhishingPrev) Scan(req *http.Request) (bool, []string) {
 
 }
 
-func (p * PhishingPrev) inspectRequest(req *http.Request) *model.Credentials {
+func inspectRequest(req *http.Request, fp_service *security.Fingerprinter) *model.Credentials {
 	err := req.ParseForm()
 	if err != nil {
 		return nil
@@ -61,7 +61,7 @@ func (p * PhishingPrev) inspectRequest(req *http.Request) *model.Credentials {
 	email := req.FormValue("email")
 	password := req.FormValue("password")
 	if !(username == "" && email == "") || password != "" {
-		return model.CreateCredentials(email, username, password, p.fp_service)
+		return model.CreateCredentials(email, username, password, fp_service)
 	}
 	return nil	//No password or no id, no leak
 }
