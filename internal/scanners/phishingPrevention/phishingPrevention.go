@@ -6,24 +6,25 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/phishingDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/security"
 )
 
-type phishingDBService interface {
-	CheckForPhishing(ctx context.Context, cred model.Credentials, domain string) (bool, string, error)
+type DBService interface {
+	CheckForPhishing(ctx context.Context, cred *model.Credentials, domain string) (bool, string, error)
 	PushCredentials(ctx context.Context, cred *model.Credentials, domain string) error
 }
 
 type PhishingPrev struct {
-	db_service phishingDBService
+	db_service DBService
 	fp_service *security.Fingerprinter
 }
 
-func New(db_service phishingDBService) *PhishingPrev{
+func New(p *phishingDBService.PhishingDBService) *PhishingPrev{
 	fp_service := security.NewFingerprinter([]byte(os.Getenv("FINGERPRINT_SEED")))
 	return &PhishingPrev{
-		db_service: db_service,
+		db_service: p,
 		fp_service: fp_service,
 	}
 }
@@ -35,7 +36,7 @@ func (p *PhishingPrev) Scan(req *http.Request) (bool, []string) {
 			return false, nil
 		}
 		ctx := req.Context()
-		phishing, reason, err := CheckForPhishing(ctx, creds, req.URL.Host)
+		phishing, reason, err := p.db_service.CheckForPhishing(ctx, creds, req.URL.Host)
 		if err != nil {
 			fmt.Printf("Error while using phishing DataBase service: %s\n", err)
 			return false, nil

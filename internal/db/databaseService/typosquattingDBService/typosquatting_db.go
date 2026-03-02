@@ -1,4 +1,4 @@
-package databaseservice
+package typosquattingDBService
 
 import (
 	"context"
@@ -13,7 +13,7 @@ type TyposquattingDBService struct{
 	db *sql.DB
 }
 
-func New(db *sql.DB) *TyposquattingDBService{
+func NewTypoSquattingDBService(db *sql.DB) *TyposquattingDBService{
 	return &TyposquattingDBService{
 		db: db,
 	}
