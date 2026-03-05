@@ -10,7 +10,7 @@ import (
 )
 
 type BlockedListDBService interface {
-    IsDomainBlockedNow(ctx context.Context, domain string, now time.Time, day time.Weekday) (blocked bool, err error)
+    IsDomainBlockedNow(ctx context.Context, domain string, now *time.Time, day *time.Weekday) (blocked bool, err error)
 }
 
 type Block struct{
@@ -25,9 +25,11 @@ func New(b *blockUrlDBService.BlockUrlDBService) *Block {
 
 func (b *Block) Scan(r *http.Request) (res bool, reasons []string) {
 	ctx := r.Context()
-	block, err := b.db_serivce.IsDomainBlockedNow(ctx, r.URL.Host, time.Now(), time.Now().Weekday())
+	now := time.Now()
+	weekday := time.Now().Weekday()
+	block, err := b.db_serivce.IsDomainBlockedNow(ctx, r.URL.Host, &now, &weekday)
 	if err != nil {
-		fmt.Printf("Error while using Blocked Domains DataBase service: %s\n", err)
+		fmt.Printf("Error while using Blocked Domains DataBase service: %v\n", err)
 		return true, nil
 	}
 	if !block{
@@ -38,5 +40,5 @@ func (b *Block) Scan(r *http.Request) (res bool, reasons []string) {
 
 func forgeScanMessage(blockedDomain string) ([]string) {
 	reasons := make([]string, 0)
-	return  append(reasons, fmt.Sprintf("Request's domain, %s, is blocked\n", blockedDomain))
+	return  append(reasons, fmt.Sprintf("Request's domain, %v, is blocked\n", blockedDomain))
 }

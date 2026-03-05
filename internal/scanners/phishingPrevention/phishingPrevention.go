@@ -12,7 +12,7 @@ import (
 )
 
 type DBService interface {
-	CheckForPhishing(ctx context.Context, cred *model.Credentials, domain string) (bool, string, error)
+	CheckForPhishing(ctx context.Context, cred *model.Credentials, domain string) (bool, *string, error)
 	PushCredentials(ctx context.Context, cred *model.Credentials, domain string) error
 }
 
@@ -46,7 +46,7 @@ func (p *PhishingPrev) Scan(req *http.Request) (bool, []string) {
 			fmt.Printf("Error while using phishing DataBase service: %s\n", err)
 		}
 		reasons := []string{}
-		reasons = append(reasons, reason)
+		reasons = append(reasons, *reason)
 		return phishing, reasons
 	}
 	return false, nil 
