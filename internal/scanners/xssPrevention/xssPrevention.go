@@ -1,4 +1,4 @@
-package xssprevention
+package xssPrevention
 
 import (
 	"fmt"
@@ -19,6 +19,9 @@ func New() *XSSPrevent {
 }
 
 func (x *XSSPrevent) Scan(req *http.Request) (bool, []string) {
+	if req.Method != "POST" {
+		return false, nil
+	}
 	q := req.URL.Query()
 	for key, vals := range q {
 		for _, v := range vals {

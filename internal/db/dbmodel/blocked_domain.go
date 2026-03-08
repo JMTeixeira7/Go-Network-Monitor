@@ -1,4 +1,4 @@
-package model
+package dbmodel
 
 type Blocked_domain struct {
 	ID int64

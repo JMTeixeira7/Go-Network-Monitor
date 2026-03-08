@@ -6,17 +6,43 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/model"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/dbmodel"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
+
+
 )
 
 type BlockUrlDBService struct {
 	db *sql.DB
 }
 
+type BlockActionUrlDBService struct {
+	db *sql.DB
+}
+
+func NewBlockActionDomainsDBService(db *sql.DB) *BlockActionUrlDBService {
+	return &BlockActionUrlDBService{
+		db: db,
+	}
+}
+
 func NewBlockedDomainsDBService(db *sql.DB) *BlockUrlDBService {
 	return &BlockUrlDBService{
 		db: db,
 	}
+}
+
+
+func (a *BlockActionUrlDBService) BlockUrlDB(ctx context.Context, domain string, schedules []model.Schedule) error {
+	panic("")
+}
+
+func (a *BlockActionUrlDBService) GetAllBlockedURL(ctx context.Context) ([]string, error) {
+	panic("")
+}
+
+func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain string) ([]model.Schedule, error) {
+	panic("")
 }
 
 func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain string, now *time.Time, day *time.Weekday) (blocked bool, err error) {
@@ -31,7 +57,7 @@ func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain strin
 	return true, nil
 }
 
-func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string) (schedules []model.Schedule, err error) {
+func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string) (schedules []dbmodel.Schedule, err error) {
 	const q = `
 		SELECT start_time, end_time, weekday
 		FROM blockedDomains b
@@ -44,9 +70,9 @@ func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string)
 	}
 	defer rows.Close()
 
-	var schedule_rows []model.Schedule
+	var schedule_rows []dbmodel.Schedule
 	for rows.Next() {
-		var s model.Schedule
+		var s dbmodel.Schedule
 		if err := rows.Scan(&s.Start_time, &s.End_time, &s.Weekday); err != nil {
 			return nil, fmt.Errorf("Fail to scan schedule row: %w", err)
 		}
@@ -62,7 +88,7 @@ func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string)
 	return schedule_rows, nil
 }
 
-func isCurrentlyBlocked(schedules []model.Schedule, now *time.Time, day *time.Weekday) bool {
+func isCurrentlyBlocked(schedules []dbmodel.Schedule, now *time.Time, day *time.Weekday) bool {
 	for i := range schedules {
 		if schedules[i].Weekday != nil {
 			if day != nil && day == schedules[i].Weekday && timeslotsIntersect(now, schedules[i].Start_time, schedules[i].End_time) {

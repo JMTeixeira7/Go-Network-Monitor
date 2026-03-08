@@ -41,7 +41,7 @@ func (h *ProxyHandler) GetHandler(w http.ResponseWriter, req *http.Request) {
 	//TODO: check if visited in the last minute
 	//send to controller for scan
 	if !SeenRecently(req.URL.String()) { //Do this via interface?
-		res, docs := h.Inspector.InspectGET(webRequest)
+		res, docs := h.Inspector.InspectRequest(webRequest)
 		if res {
 			fmt.Printf("Scanning results:\n %s\n", docs)
 			return
@@ -76,7 +76,7 @@ func (h *ProxyHandler) PostHandler(w http.ResponseWriter, req *http.Request) {
 	webRequest.Header = req.Header.Clone()
 
 	//TODO: phishing + XSS scan
-	res, docs := h.Inspector.InspectPOST(webRequest)
+	res, docs := h.Inspector.InspectRequest(webRequest)
 	if res {
 		fmt.Printf("Scanning results:\n %s\n", docs)
 		return

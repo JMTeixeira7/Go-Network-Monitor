@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/model"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/dbmodel"
 )
 
 type TyposquattingDBService struct{
@@ -43,7 +43,7 @@ func (t *TyposquattingDBService) PushDomain(ctx context.Context, domain string) 
 	return nil
 }
 
-func fetchDomains(db *sql.DB, ctx context.Context) ([]model.Domain, error) {
+func fetchDomains(db *sql.DB, ctx context.Context) ([]dbmodel.Domain, error) {
 	const q = `
 		SELECT id, domain, time
 		FROM visitedDomains
@@ -57,9 +57,9 @@ func fetchDomains(db *sql.DB, ctx context.Context) ([]model.Domain, error) {
 	}
 	defer rows.Close()
 
-	var visited []model.Domain
+	var visited []dbmodel.Domain
 	for rows.Next() {
-		var d model.Domain
+		var d dbmodel.Domain
 		if err := rows.Scan(&d.ID, &d.Domain, &d.Time); err != nil {
 			return nil, fmt.Errorf("scan domain row: %w", err)
 		}

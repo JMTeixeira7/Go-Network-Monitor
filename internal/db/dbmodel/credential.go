@@ -1,4 +1,4 @@
-package model
+package dbmodel
 
 type Credential struct {
 	ID int64

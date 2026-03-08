@@ -30,27 +30,26 @@ func New(p *phishingDBService.PhishingDBService) *PhishingPrev{
 }
 
 func (p *PhishingPrev) Scan(req *http.Request) (bool, []string) {
-	if req.Method == "POST" {
-		creds := inspectRequest(req, p.fp_service)
-		if creds==nil {
-			return false, nil
-		}
-		ctx := req.Context()
-		phishing, reason, err := p.db_service.CheckForPhishing(ctx, creds, req.URL.Host)
-		if err != nil {
-			fmt.Printf("Error while using phishing DataBase service: %s\n", err)
-			return false, nil
-		}
-		err = p.db_service.PushCredentials(ctx, creds, req.URL.Host)
-		if err != nil {
-			fmt.Printf("Error while using phishing DataBase service: %s\n", err)
-		}
-		reasons := []string{}
-		reasons = append(reasons, *reason)
-		return phishing, reasons
+	if req.Method != "POST" {
+		return false, nil
 	}
-	return false, nil 
-
+	creds := inspectRequest(req, p.fp_service)
+	if creds==nil {
+		return false, nil
+	}
+	ctx := req.Context()
+	phishing, reason, err := p.db_service.CheckForPhishing(ctx, creds, req.URL.Host)
+	if err != nil {
+		fmt.Printf("Error while using phishing DataBase service: %s\n", err)
+		return false, nil
+	}
+	err = p.db_service.PushCredentials(ctx, creds, req.URL.Host)
+	if err != nil {
+		fmt.Printf("Error while using phishing DataBase service: %s\n", err)
+	}
+	reasons := []string{}
+	reasons = append(reasons, *reason)
+	return phishing, reasons
 }
 
 func inspectRequest(req *http.Request, fp_service *security.Fingerprinter) *model.Credentials {
