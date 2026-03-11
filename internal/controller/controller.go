@@ -42,9 +42,9 @@ type ActionGroup interface {
 
 type BlockActionUrlService interface {
 	ActionGroup
-	BlockUrl(domain string, schedules []model.Schedule) error
-	GetAllBlockedURL() ([]string, error)
-	GetBlockedURL(domain string) ([]model.Schedule, error)
+	BlockUrl(ctx context.Context, domain string, schedules []string) error
+	GetAllBlockedURL(ctx context.Context) ([]string, error)
+	GetBlockedURL(ctx context.Context, domain string) ([]model.Schedule, error)
 }
 
 func New(db *sql.DB) *Controller {
@@ -95,14 +95,21 @@ func (c *Controller) DisplayOperations() {
 			serverRunning = true
 			fmt.Println("Server started on 127.0.0.1:4444")
 		case "2":
-			fmt.Printf("Introduce a domain you which to block with this format: e.g. google.com\n")
+			fmt.Print("Introduce a domain you which to block with this format: e.g. google.com\n")
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				return
 			}
-			fmt.Printf("Introduce a scehdule o block domain: %s\n", line)
-			fmt.Printf("Skip this if you don't wish to set a schedule\n\n")
-			//TODO set schedule
+			fmt.Printf("Do you wish to set a block schedule for this domain, %s? [Yes/No]\n", line)
+			response, err := readBinaryResponse(reader)
+			if err != nil {
+				fmt.Print(err)
+				continue
+			}
+			schedules := []string{}
+			if response {
+				schedules, err = readSchedule(reader)
+			}
 			group, ok := c.Actions["block_url_action"]
 			if !ok {
 				fmt.Println("Did not find the Service for the given request")
@@ -113,10 +120,46 @@ func (c *Controller) DisplayOperations() {
 				fmt.Println("Did not find the Service for the given request")
 				continue
 			}
-			err = blockGroup.BlockUrl(line, nil)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			err = blockGroup.BlockUrl(ctx, line, schedules)
 			if err != nil {
-				fmt.Println("Could not perform you request:\n%s\n", err)
+				fmt.Printf("Could not perform your request:\n%s\n", err)
 				continue
+			}
+		case "3":
+			fmt.Println("Enter a domain or skip to view all blocked domains:")
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				return
+			}
+		
+			group, ok := c.Actions["block_url_action"]
+			if !ok {
+				fmt.Println("Did not find the Service for the given request")
+				continue
+			}
+			blockGroup, ok := group.(BlockActionUrlService)
+			if !ok {
+				fmt.Println("Did not find the Service for the given request")
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if line != "" {
+				schedules, err := blockGroup.GetBlockedURL(ctx, line)
+				if err != nil {
+					fmt.Printf("Could not perform your request:\n%s\n", err)
+					continue
+				}
+				displaySchedules(schedules)	//TODO
+			} else {
+				blocked_domains, err := blockGroup.GetAllBlockedURL(ctx)
+				if err != nil {
+					fmt.Printf("Could not perform your request:\n%s\n", err)
+					continue
+				}
+				displayBlockedDomains(blocked_domains)	//TODO
 			}
 		case "5":
 			if !serverRunning {
@@ -151,4 +194,40 @@ func (c *Controller) InspectGET(req *http.Request) (res bool, reason string) {
 
 func parseMsg(reasons []string) (msg string) {
 	panic("not implemented")
+}
+
+func readBinaryResponse(reader *bufio.Reader) (bool, error) {
+	for true {
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			return false, fmt.Errorf("Failed to read user response, %w", err) 
+		}
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response == "y" || response == "yes" {
+			return true, nil
+		}
+		if response == "n" || response == "no" {
+			return false, nil
+		}
+		fmt.Print("Please enter [Yes/No]:")
+	}
+	return false, nil
+}
+
+func readSchedule(reader *bufio.Reader) ([]string, error) {
+	var schedules []string
+	for {
+		fmt.Print("Enter schedule as: <timestamp> <timestamp> <weekday>\nUse - to skip a field. Press Enter on an empty line to finish:\n")
+
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("failed to read user response: %w", err)
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
+			return schedules, nil
+		}
+		schedules = append(schedules, line)
+	}
 }

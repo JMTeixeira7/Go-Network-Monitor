@@ -46,13 +46,13 @@ VALUES
 
 
 DROP TABLE IF EXISTS schedule
-CREATE TABLE scehdule (
+CREATE TABLE schedule (
   id                  INT AUTO_INCREMENT NOT NULL,
   blocked_domain_key  INT NOT NULL,
   start_time          TIMESTAMP,
   end_time            TIMESTAMP,
   weekday             INT,
-  PRIMARY KEY (`ID`)
+  PRIMARY KEY (`id`)
   FOREIGN KEY (`blocked_domain_key`) REFERENCES blockedDomains(id)
 )
 

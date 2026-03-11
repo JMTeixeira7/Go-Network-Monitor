@@ -8,8 +8,6 @@ import (
 
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/dbmodel"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
-
-
 )
 
 type BlockUrlDBService struct {
@@ -33,8 +31,17 @@ func NewBlockedDomainsDBService(db *sql.DB) *BlockUrlDBService {
 }
 
 
-func (a *BlockActionUrlDBService) BlockUrlDB(ctx context.Context, domain string, schedules []model.Schedule) error {
-	panic("")
+func (a *BlockActionUrlDBService) BlockUrlDB(ctx context.Context, domain string, schedules []*model.Schedule) error {
+	var db_schedules []dbmodel.Schedule
+	for _, s := range schedules {
+		db_s := toDBSchedule(s)
+		db_schedules = append(db_schedules, *db_s)
+	}
+	err := blockUrlTransaction(a.db, ctx, domain, db_schedules)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *BlockActionUrlDBService) GetAllBlockedURL(ctx context.Context) ([]string, error) {
@@ -42,13 +49,25 @@ func (a *BlockActionUrlDBService) GetAllBlockedURL(ctx context.Context) ([]strin
 }
 
 func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain string) ([]model.Schedule, error) {
-	panic("")
+	schedules, err := fetchBlockedDomainSchedules(a.db, ctx, domain)
+	if err != nil {
+		return nil, fmt.Errorf("Error while fetching domain %s block schedules: %w", domain, err)
+	}
+	var model_schedules []model.Schedule
+	for _, s := range schedules {
+		model_s, err := toModelSchedule(&s)
+		if err != nil {
+			return nil, fmt.Errorf("Error while parsing db Schedule, %w", err)
+		}
+		model_schedules = append(model_schedules, *model_s)
+	}
+		return model_schedules, nil
 }
 
 func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain string, now *time.Time, day *time.Weekday) (blocked bool, err error) {
 	schedules, err := fetchBlockedDomainSchedules(b.db, ctx, domain)
 	if err != nil {
-		return false, fmt.Errorf("Error while checking if domain %s is blocked: %w", domain, err)
+		return false, fmt.Errorf("Error while fetching domain %s block schedules: %w", domain, err)
 	}
 	if schedules != nil {
 		blocked = isCurrentlyBlocked(schedules, now, day)
@@ -57,6 +76,57 @@ func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain strin
 	return true, nil
 }
 
+func blockUrlTransaction(db *sql.DB, ctx context.Context, domain string, schedules []dbmodel.Schedule) error {
+	const q1 = `
+		INSERT INTO blockedDomains
+		(domain)
+		VALUES
+		(?)
+	`
+	const q2 = `
+		INSERT INTO schedule
+		(blocked_domain_key, start_time, end_time, weekday)
+		VALUES
+		(?, ?, ?, ?)
+	`
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	res, err := db.ExecContext(ctx, q1, domain)
+	if err != nil {
+		return fmt.Errorf("push block_domain: %w", err)
+	}
+	blocked_domain_key, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("get blocked domain id: %w", err)
+	}
+	for _, s := range schedules{
+		var weekday_value any
+		if s.Weekday == nil { weekday_value = nil
+		} else { weekday_value = int(*s.Weekday)}
+
+		_, err := db.ExecContext(ctx, q2, blocked_domain_key, s.Start_time, s.End_time, weekday_value)
+		if err != nil {
+			return fmt.Errorf("push schedule: %w", err)
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("commit transaction aborted: %w", err)
+	}
+	committed = true
+	return nil
+}
 func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string) (schedules []dbmodel.Schedule, err error) {
 	const q = `
 		SELECT start_time, end_time, weekday
@@ -116,4 +186,26 @@ func timeslotsIntersect(now *time.Time, min *time.Time, max *time.Time) bool {
 	return false
 }
 
+func toModelSchedule(schedule *dbmodel.Schedule) (*model.Schedule, error) {
+	if schedule == nil {
+		return nil, nil
+	}
 
+	return model.CreateSchedule(
+		schedule.Start_time,
+		schedule.End_time,
+		schedule.Weekday,
+	)
+}
+
+func toDBSchedule(schedule *model.Schedule) *dbmodel.Schedule {
+	if schedule == nil {
+		return nil
+	}
+
+	return &dbmodel.Schedule{
+		Start_time: schedule.StartTime(),
+		End_time:   schedule.EndTime(),
+		Weekday:    schedule.Weekday(),
+	}
+}
