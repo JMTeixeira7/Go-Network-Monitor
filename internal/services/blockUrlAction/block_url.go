@@ -13,7 +13,7 @@ import (
 type BlockActionUrlDBService interface {
 	BlockUrlDB(ctx context.Context, domain string, schedules []*model.Schedule) error
 	GetAllBlockedURL(ctx context.Context) ([]string, error)
-	GetBlockedURL(ctx context.Context, domain string) ([]model.Schedule, error)
+	GetBlockedURL(ctx context.Context, domain string) ([]*model.Schedule, error)
 
 }
 type BlockURLService struct {
@@ -43,11 +43,26 @@ func (b *BlockURLService) BlockUrl(ctx context.Context, domain string, raw_sched
 }
 
 func (b *BlockURLService) GetAllBlockedURL(ctx context.Context) ([]string, error) {
-	panic("not yet implemented")
+	blocked_domains, err := b.db_service.GetAllBlockedURL(ctx)
+	if err != nil {
+		return nil, err
+	} else if blocked_domains == nil {
+		fmt.Println("There are no blacklisted domains at the moment")
+		return nil, nil
+	}
+	return blocked_domains, nil
 }
 
 func (b *BlockURLService) GetBlockedURL(ctx context.Context, domain string) ([]string, error) {
-	panic("not yet implemented")
+	schedules, err := b.db_service.GetBlockedURL(ctx, domain)
+	if err != nil {
+		return nil, err
+	}
+	strSchedules, err := schedulesToString(schedules)
+	if err != nil {
+		return nil, fmt.Errorf("Error while parsing schedules to string: %w", err)
+	}
+	return strSchedules, nil
 }
 
 
@@ -67,8 +82,34 @@ func parseSchedules(lines []string) ([]*model.Schedule, error) {
 	return schedules, nil
 }
 
-func decodeSchedules(parsed_schedules []model.Schedule) (decoded_schedule []string) {
-	panic("not implemented")
+func schedulesToString(parsedSchedules []*model.Schedule) ([]string, error) {
+	var decodedSchedules []string
+
+	for i, schedule := range parsedSchedules {
+		if schedule == nil {
+			continue
+		}
+
+		startStr := "-"
+		if schedule.StartTime() != nil {
+			startStr = schedule.StartTime().Format(time.RFC3339)
+		}
+
+		endStr := "-"
+		if schedule.EndTime() != nil {
+			endStr = schedule.EndTime().Format(time.RFC3339)
+		}
+
+		weekdayStr := "-"
+		if schedule.Weekday() != nil {
+			weekdayStr = weekdayToString(*schedule.Weekday())
+		}
+
+		line := fmt.Sprintf("%s %s %s\n", startStr, endStr, weekdayStr)
+		decodedSchedules = append(decodedSchedules, line)
+		_ = i
+	}
+	return decodedSchedules, nil
 }
 
 func parseScheduleLine(line string) (*model.Schedule, error) {
@@ -133,14 +174,37 @@ func parseWeekday(s string) (*time.Weekday, error) {
 	}
 }
 
+func weekdayToString(w time.Weekday) string {
+	switch w {
+	case time.Sunday:
+		return "Sunday"
+	case time.Monday:
+		return "Monday"
+	case time.Tuesday:
+		return "Tuesday"
+	case time.Wednesday:
+		return "Wednesday"
+	case time.Thursday:
+		return "Thursday"
+	case time.Friday:
+		return "Friday"
+	case time.Saturday:
+		return "Saturday"
+	default:
+		return "-"
+	}
+}
+
 func parseTimestamp(s string) (*time.Time, error) {
+	const layout = "15:04:05"
+	
 	if s == "-" || s == "" {
 		return nil, nil
 	}
-
-	t, err := time.Parse(time.RFC3339, s)
+	t, err := time.Parse(layout, s)
 	if err != nil {
 		return nil, fmt.Errorf("invalid timestamp %q: %w", s, err)
 	}
+	fmt.Println(&t)
 	return &t, nil
 }

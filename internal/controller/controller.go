@@ -9,11 +9,10 @@ import (
 	"os"
 	"strings"
 	"time"
-
+	
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/blockUrlDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/phishingDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/typosquattingDBService"
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httpListener"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/blockURL"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/phishingPrevention"
@@ -44,7 +43,7 @@ type BlockActionUrlService interface {
 	ActionGroup
 	BlockUrl(ctx context.Context, domain string, schedules []string) error
 	GetAllBlockedURL(ctx context.Context) ([]string, error)
-	GetBlockedURL(ctx context.Context, domain string) ([]model.Schedule, error)
+	GetBlockedURL(ctx context.Context, domain string) ([]string, error)
 }
 
 func New(db *sql.DB) *Controller {
@@ -120,7 +119,7 @@ func (c *Controller) DisplayOperations() {
 				fmt.Println("Did not find the Service for the given request")
 				continue
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			err = blockGroup.BlockUrl(ctx, line, schedules)
 			if err != nil {
@@ -146,20 +145,20 @@ func (c *Controller) DisplayOperations() {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			if line != "" {
+			if line != "\n" {
 				schedules, err := blockGroup.GetBlockedURL(ctx, line)
 				if err != nil {
 					fmt.Printf("Could not perform your request:\n%s\n", err)
 					continue
 				}
-				displaySchedules(schedules)	//TODO
+				fmt.Printf(displaySchedules(schedules))
 			} else {
 				blocked_domains, err := blockGroup.GetAllBlockedURL(ctx)
 				if err != nil {
 					fmt.Printf("Could not perform your request:\n%s\n", err)
 					continue
 				}
-				displayBlockedDomains(blocked_domains)	//TODO
+				fmt.Printf(displayBlockedDomains(blocked_domains))
 			}
 		case "5":
 			if !serverRunning {
@@ -192,8 +191,29 @@ func (c *Controller) InspectGET(req *http.Request) (res bool, reason string) {
 	return res, parseMsg(reasons)
 }
 
-func parseMsg(reasons []string) (msg string) {
-	panic("not implemented")
+func parseMsg(reasons []string) string {
+	if len(reasons) == 0 {
+		return "No scan reasons.\n"
+	}
+
+	var b strings.Builder
+	b.WriteString("Scan results:\n")
+
+	count := 0
+	for _, reason := range reasons {
+		reason = strings.TrimSpace(reason)
+		if reason == "" {
+			continue
+		}
+		count++
+		b.WriteString(fmt.Sprintf("  %d. %s\n", count, reason))
+	}
+
+	if count == 0 {
+		return "No scan reasons.\n"
+	}
+
+	return b.String()
 }
 
 func readBinaryResponse(reader *bufio.Reader) (bool, error) {
@@ -230,4 +250,30 @@ func readSchedule(reader *bufio.Reader) ([]string, error) {
 		}
 		schedules = append(schedules, line)
 	}
+}
+
+func displaySchedules(schedules []string) string {
+	if len(schedules) == 0 {
+		return "Schedules: none\n"
+	}
+
+	var b strings.Builder
+	b.WriteString("Schedules:\n")
+	for i, schedule := range schedules {
+		b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, schedule))
+	}
+	return b.String()
+}
+
+func displayBlockedDomains(domains []string) string {
+	if len(domains) == 0 {
+		return "Blocked domains: none\n"
+	}
+
+	var b strings.Builder
+	b.WriteString("Blocked domains:\n")
+	for i, domain := range domains {
+		b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, domain))
+	}
+	return b.String()
 }

@@ -45,23 +45,27 @@ func (a *BlockActionUrlDBService) BlockUrlDB(ctx context.Context, domain string,
 }
 
 func (a *BlockActionUrlDBService) GetAllBlockedURL(ctx context.Context) ([]string, error) {
-	panic("")
+	blocked_domains, err := fetchBlockedDomains(a.db, ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Error while fetching Blocked domains from db: %w", err)
+	}
+	return blocked_domains, nil
 }
 
-func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain string) ([]model.Schedule, error) {
+func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain string) ([]*model.Schedule, error) {
 	schedules, err := fetchBlockedDomainSchedules(a.db, ctx, domain)
 	if err != nil {
 		return nil, fmt.Errorf("Error while fetching domain %s block schedules: %w", domain, err)
 	}
-	var model_schedules []model.Schedule
+	var model_schedules []*model.Schedule
 	for _, s := range schedules {
 		model_s, err := toModelSchedule(&s)
 		if err != nil {
 			return nil, fmt.Errorf("Error while parsing db Schedule, %w", err)
 		}
-		model_schedules = append(model_schedules, *model_s)
+		model_schedules = append(model_schedules, model_s)
 	}
-		return model_schedules, nil
+	return model_schedules, nil
 }
 
 func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain string, now *time.Time, day *time.Weekday) (blocked bool, err error) {
@@ -74,6 +78,35 @@ func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain strin
 		return blocked, nil
 	}
 	return true, nil
+}
+
+func fetchBlockedDomains(db *sql.DB, ctx context.Context) ([]string, error) {
+	const q = `
+		SELECT domain
+		FROM blockedDomains
+	`
+	rows, err := db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var blocked_domains []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, fmt.Errorf("Fail to scan schedule row: %w", err)
+		}
+		blocked_domains = append(blocked_domains, d)
+	}
+	err = rows.Err()
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil	// no blocked domains
+		}
+		return nil, fmt.Errorf("Fail iterating rows: %w", err)
+	}
+	return blocked_domains, nil
 }
 
 func blockUrlTransaction(db *sql.DB, ctx context.Context, domain string, schedules []dbmodel.Schedule) error {
@@ -102,7 +135,7 @@ func blockUrlTransaction(db *sql.DB, ctx context.Context, domain string, schedul
 		}
 	}()
 
-	res, err := db.ExecContext(ctx, q1, domain)
+	res, err := tx.ExecContext(ctx, q1, domain)
 	if err != nil {
 		return fmt.Errorf("push block_domain: %w", err)
 	}
@@ -115,7 +148,7 @@ func blockUrlTransaction(db *sql.DB, ctx context.Context, domain string, schedul
 		if s.Weekday == nil { weekday_value = nil
 		} else { weekday_value = int(*s.Weekday)}
 
-		_, err := db.ExecContext(ctx, q2, blocked_domain_key, s.Start_time, s.End_time, weekday_value)
+		_, err := tx.ExecContext(ctx, q2, blocked_domain_key, s.Start_time, s.End_time, weekday_value)
 		if err != nil {
 			return fmt.Errorf("push schedule: %w", err)
 		}
@@ -129,11 +162,12 @@ func blockUrlTransaction(db *sql.DB, ctx context.Context, domain string, schedul
 }
 func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string) (schedules []dbmodel.Schedule, err error) {
 	const q = `
-		SELECT start_time, end_time, weekday
+		SELECT s.start_time, s.end_time, s.weekday
 		FROM blockedDomains b
-		JOIN schedule s
-		WHERE b.domain = ? AND b.id = s.blocked_domain_key
+		JOIN schedule s ON b.id = s.blocked_domain_key
+		WHERE b.domain = ?
 	`
+
 	rows, err := db.QueryContext(ctx, q, domain)
 	if err != nil {
 		return nil, fmt.Errorf("Error while fetching Blocked domain key: %w", err)
