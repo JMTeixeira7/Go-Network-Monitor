@@ -26,11 +26,6 @@ type Controller struct {
 	Actions map[string]ActionGroup
 }
 
-// InspectRequest implements httplistener.Inspector.
-func (c *Controller) InspectRequest(req *http.Request) (res bool, reason string) {
-	panic("unimplemented")
-}
-
 type Scan interface {
 	Scan(r *http.Request) (res bool, reasons []string)
 }
@@ -178,7 +173,7 @@ func (c *Controller) DisplayOperations() {
 }
 
 // InspectGET implements httplistener.Inspector.
-func (c *Controller) InspectGET(req *http.Request) (res bool, reason string) {
+func (c *Controller) InspectRequest(req *http.Request) (res bool, reason string) {
 	var reasons []string
 	res = true
 	for _, s := range c.Scans {

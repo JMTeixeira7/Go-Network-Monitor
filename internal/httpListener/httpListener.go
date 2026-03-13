@@ -1,11 +1,13 @@
 package httplistener
 
 import (
-    "context"
-    "errors"
-    "fmt"
-    "net"
-    "net/http"
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"sync"
+	"time"
 )
 
 const KeyServerAddr = "ServerAdress"
@@ -14,11 +16,15 @@ type Inspector interface {
     InspectRequest(req *http.Request) (res bool, reason string)
 }
 
-
 func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) error, err error) {
     ctx, cancel := context.WithCancel(context.Background())
 
-    handler := &ProxyHandler{Inspector: inspector}
+    handler := &ProxyHandler{Inspector: inspector,
+                             cache: map[string]time.Time{},
+                             cacheTTL: 30*time.Minute.Abs(),
+                             max_tries: 5,
+                             mu: &sync.RWMutex{},
+                            }
 
     srv := &http.Server{
         Addr:    "127.0.0.1:4444",
@@ -27,6 +33,8 @@ func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) er
             return context.WithValue(ctx, KeyServerAddr, l.Addr().String())
         },
     }
+
+    go handler.startCleanup(ctx, 45*time.Second)
 
     go func() {
         e := srv.ListenAndServe()
