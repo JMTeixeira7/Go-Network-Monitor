@@ -65,7 +65,7 @@ func (t *Typosquatting) Scan(req *http.Request) (res bool, reasons []string) {
 		}
 	}
 
-	return false, reasons
+	return false, nil
 }
 
 func (additionalCharacter) check(reqDomain, visitedDomain string) bool {

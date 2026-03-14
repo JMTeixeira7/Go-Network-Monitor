@@ -35,7 +35,7 @@ func (a *BlockActionUrlDBService) BlockUrlDB(ctx context.Context, domain string,
 	var db_schedules []dbmodel.Schedule
 	for _, s := range schedules {
 		db_s := toDBSchedule(s)
-		db_schedules = append(db_schedules, *db_s)
+		db_schedules = append(db_schedules, db_s)
 	}
 	err := blockUrlTransaction(a.db, ctx, domain, db_schedules)
 	if err != nil {
@@ -73,11 +73,11 @@ func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain strin
 	if err != nil {
 		return false, fmt.Errorf("Error while fetching domain %s block schedules: %w", domain, err)
 	}
-	if schedules != nil {
-		blocked = isCurrentlyBlocked(schedules, now, day)
-		return blocked, nil
+	if schedules == nil {
+		return false, nil
 	}
-	return true, nil
+	blocked = isCurrentlyBlocked(schedules, now, day)
+	return blocked, nil
 }
 
 func fetchBlockedDomains(db *sql.DB, ctx context.Context) ([]string, error) {
@@ -185,6 +185,7 @@ func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string)
 	err = rows.Err()
 	if err != nil {
 		if err == sql.ErrNoRows {
+			fmt.Printf("Blocked_Domain_db_Service: We couldnt find any schedules")
 			return nil, nil	//domain is blocked without explicit schedule
 		}
 		return nil, fmt.Errorf("Fail iterating rows: %w", err)
@@ -232,12 +233,16 @@ func toModelSchedule(schedule *dbmodel.Schedule) (*model.Schedule, error) {
 	)
 }
 
-func toDBSchedule(schedule *model.Schedule) *dbmodel.Schedule {
+func toDBSchedule(schedule *model.Schedule) dbmodel.Schedule {
 	if schedule == nil {
-		return nil
+		return dbmodel.Schedule{
+			Start_time: nil,
+			End_time:   nil,
+			Weekday:    nil,
+		}
 	}
 
-	return &dbmodel.Schedule{
+	return dbmodel.Schedule{
 		Start_time: schedule.StartTime(),
 		End_time:   schedule.EndTime(),
 		Weekday:    schedule.Weekday(),

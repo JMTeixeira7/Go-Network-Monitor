@@ -114,13 +114,14 @@ func (c *Controller) DisplayOperations() {
 				fmt.Println("Did not find the Service for the given request")
 				continue
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			err = blockGroup.BlockUrl(ctx, line, schedules)
 			if err != nil {
 				fmt.Printf("Could not perform your request:\n%s\n", err)
 				continue
 			}
+			//update cache(domain)
 		case "3":
 			fmt.Println("Enter a domain or skip to view all blocked domains:")
 			line, err := reader.ReadString('\n')
@@ -179,10 +180,11 @@ func (c *Controller) InspectRequest(req *http.Request) (res bool, reason string)
 	for _, s := range c.Scans {
 		block, rs := s.Scan(req)
 		reasons = append(reasons, rs...)
-		if !block {
+		if block {
 			res = false
 		}
 	}
+	fmt.Printf("Controller - Scan result: %t Reasons of the stack: %v\n",res, reasons )
 	return res, parseMsg(reasons)
 }
 

@@ -12,12 +12,18 @@ import (
 	"time"
 )
 
+type CacheCommand struct {
+	DeleteDomains []string
+	ClearAll       bool
+}
+
 type ProxyHandler struct {
 	Inspector Inspector
 	cache map[string]time.Time
 	cacheTTL time.Duration
 	max_tries int
-	mu *sync.RWMutex
+	mu sync.RWMutex
+	cacheCmds chan CacheCommand
 }
 
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -33,7 +39,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (h *ProxyHandler) GetHandler(w http.ResponseWriter, req *http.Request) {
 	//ctx := req.Context()
-
+	fmt.Println("Handler - This is a GET Request")
 	var body io.Reader //ignores body in GET method even if it exists
 	webRequest, err := http.NewRequest(req.Method, req.URL.String(), body)
 	if err != nil {
@@ -41,25 +47,24 @@ func (h *ProxyHandler) GetHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	webRequest.Header = req.Header.Clone()
-
-	//TODO: check if visited in the last minute
-	//send to controller for scan
-	if !h.seenRecently(req.URL.String()) { //Do this via interface?
+	fmt.Printf("CACHE: %v\n", h.cache)
+	if !h.seenRecently(req.URL.Host) {
+		fmt.Printf("Handler - domain, %s, was NOT cached", req.URL.Host)
 		res, docs := h.Inspector.InspectRequest(webRequest)
-		if res {
+		if !res {
 			fmt.Printf("Scanning results:\n %s\n", docs)
 			return
 		}
+		h.markSeen(req.URL.String())
 	}
 
 	var webRes *http.Response
+	fmt.Printf("HANDLER - Sending Requesto to webserver: %s\n", req.URL.Host)
 	webRes, err = h.sendRequest(webRequest)
 	if err != nil {
 		fmt.Printf("Error while redirecting request: %s\n", err)
 		return
 	}
-
-	h.markSeen(req.URL.String())
 
 	defer webRes.Body.Close()
 	for key, value := range webRes.Header {
@@ -72,6 +77,7 @@ func (h *ProxyHandler) GetHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h *ProxyHandler) PostHandler(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("Handler - This is a POST Request")
 	webRequest, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
 	if err != nil {
 		fmt.Printf("Could not create new request: %s", err)
@@ -86,6 +92,7 @@ func (h *ProxyHandler) PostHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var webRes *http.Response
+	fmt.Printf("HANDLER - Sending Requesto to webserver: %s\n", req.URL.Host)
 	webRes, err = h.sendRequest(webRequest)
 	if err != nil {
 		fmt.Printf("Error while redirecting request: %s\n", err)
@@ -184,6 +191,40 @@ func (h *ProxyHandler) startCleanup(ctx context.Context, timer time.Duration) {
 		case <-ticker.C:
 			h.cleanupExpired()
 		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (h *ProxyHandler) applyCacheCommand(cmd CacheCommand) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if cmd.ClearAll {
+		clear(h.cache)
+		return
+	}
+
+	for _, domain := range cmd.DeleteDomains {
+		delete(h.cache, domain)
+	}
+}
+
+func (h *ProxyHandler) startCacheRoutine(ctx context.Context, every time.Duration) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			h.cleanupExpired()
+
+		case cmd := <-h.cacheCmds:
+			h.applyCacheCommand(cmd)
+
+		case <-ctx.Done():
+			// optional final cleanup before exit
+			h.cleanupExpired()
 			return
 		}
 	}

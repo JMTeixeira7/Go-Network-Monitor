@@ -16,6 +16,10 @@ type Inspector interface {
     InspectRequest(req *http.Request) (res bool, reason string)
 }
 
+func UpdateListenerCache(domain string)  {
+    go handler.removeDomainCache(ctx, domain)
+}
+
 func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) error, err error) {
     ctx, cancel := context.WithCancel(context.Background())
 
@@ -23,7 +27,8 @@ func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) er
                              cache: map[string]time.Time{},
                              cacheTTL: 30*time.Minute.Abs(),
                              max_tries: 5,
-                             mu: &sync.RWMutex{},
+                             mu: sync.RWMutex{},
+                             cacheCmds: make(chan CacheCommand, 8),
                             }
 
     srv := &http.Server{
@@ -34,7 +39,7 @@ func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) er
         },
     }
 
-    go handler.startCleanup(ctx, 45*time.Second)
+    go handler.startCacheRoutine(ctx, 45*time.Second)
 
     go func() {
         e := srv.ListenAndServe()
@@ -52,4 +57,5 @@ func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) er
         cancel()
         return err
     }, nil
+    //TODO
 }

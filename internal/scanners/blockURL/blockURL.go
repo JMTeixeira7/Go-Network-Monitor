@@ -30,10 +30,10 @@ func (b *Block) Scan(r *http.Request) (res bool, reasons []string) {
 	block, err := b.db_serivce.IsDomainBlockedNow(ctx, r.URL.Host, &now, &weekday)
 	if err != nil {
 		fmt.Printf("Error while using Blocked Domains DataBase service: %v\n", err)
-		return true, nil
+		return false, nil
 	}
 	if !block{
-		return block, reasons
+		return block, nil
 	}
 	return block, forgeScanMessage(r.URL.Host)
 }

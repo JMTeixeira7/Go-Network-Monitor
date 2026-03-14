@@ -23,20 +23,20 @@ cd <repo-folder>
 
 Terminal1
 ```bash
-cd <repo-folder/internal/db>
-docker compose up
+cd <repo-folder>
+docker compose --env-file .env -f internal/db/docker-compose.yml down -v
+docker compose --env-file .env -f internal/db/docker-compose.yml up -d mysql
 ```
+```bash
+docker compose --env-file .env -f internal/db/docker-compose.yml ps
+```
+
 Terminal2
 ```bash
 cd <repo-folder/internal/db>
+docker compose --env-file ../../.env -f docker-compose.yml exec mysql mysql -uproxyuser -pproxypass proxydb
 ```
-```bash
-docker compose up -d mysql
-docker compose ps
-```
-```bash
-docker compose exec mysql mysql -uproxyuser -pproxypass proxydb
-```
+
 Terminal3
 ```bash
 cd <repo-folder>

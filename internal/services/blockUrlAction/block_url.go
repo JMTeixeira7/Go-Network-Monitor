@@ -75,9 +75,7 @@ func parseSchedules(lines []string) ([]*model.Schedule, error) {
 			return nil, fmt.Errorf("error parsing schedule at line %d: %w", i+1, err)
 		}
 
-		if schedule != nil {
-			schedules = append(schedules, schedule)
-		}
+		schedules = append(schedules, schedule)
 	}
 	return schedules, nil
 }
