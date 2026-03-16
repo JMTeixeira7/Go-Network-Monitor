@@ -7,7 +7,8 @@ CREATE TABLE visitedDomains (
   id          INT AUTO_INCREMENT NOT NULL,
   domain      VARCHAR(255) NOT NULL,
   time        TIMESTAMP NULL,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  UNIQUE(domain)
 );
 
 INSERT INTO visitedDomains

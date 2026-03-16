@@ -55,7 +55,7 @@ func fetchPhishingInstance(ctx context.Context, cred *model.Credentials, domain 
 		ORDER BY v.time DESC
 		LIMIT 1;
 	`
-
+	fmt.Printf("Phishing test attempt-> credntials: %+v", cred)
 	var legitDomain string
 	err := db.QueryRowContext(ctx, q, cred.Username, cred.Fingerprint, domain).Scan(&legitDomain)
 	if err == sql.ErrNoRows {

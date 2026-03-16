@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/typosquattingDBService"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/visitDBService"
 )
 
 type DBService interface {
 	GetVisitedDomains(ctx context.Context) ([]string, error)
-	PushDomain(ctx context.Context, domain string) error
 }
 
 type Check interface {
@@ -31,7 +30,7 @@ type Typosquatting struct {
 	Checks     []Check
 }
 
-func New(ts *typosquattingDBService.TyposquattingDBService) *Typosquatting {
+func New(ts *visitDBService.TyposquattingDBService) *Typosquatting {
 	checks := make([]Check, 0, 3)
 	checks = append(checks, NewAdditionalCharacterCheck())
 	checks = append(checks, NewFewerCharacterCheck())
@@ -50,11 +49,6 @@ func (t *Typosquatting) Scan(req *http.Request) (res bool, reasons []string) {
 		return false, nil
 	}
 
-	err = t.db_service.PushDomain(ctx, req.URL.Hostname())
-	if err != nil {
-		fmt.Printf("Error while pushing current request to database: %s\n", err)
-	}
-
 	for i := 0; i < len(visitedDomains); i++ {
 		for j := 0; j < len(t.Checks); j++ {
 			res = t.Checks[j].check(req.URL.Hostname(), visitedDomains[i])
@@ -64,7 +58,6 @@ func (t *Typosquatting) Scan(req *http.Request) (res bool, reasons []string) {
 			}
 		}
 	}
-
 	return false, nil
 }
 

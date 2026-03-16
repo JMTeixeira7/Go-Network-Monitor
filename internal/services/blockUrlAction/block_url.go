@@ -32,7 +32,7 @@ func (b *BlockURLService) Name() string {
 
 func (b *BlockURLService) BlockUrl(ctx context.Context, domain string, raw_schedules []string) error {
 	parsed_schedules, err := parseSchedules(raw_schedules)
-	if err !=nil {
+	if err != nil {
 		return fmt.Errorf("Error while parsing the Schedules, %w", err)
 	}
 	err = b.db_service.BlockUrlDB(ctx, domain, parsed_schedules)
@@ -74,7 +74,6 @@ func parseSchedules(lines []string) ([]*model.Schedule, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error parsing schedule at line %d: %w", i+1, err)
 		}
-
 		schedules = append(schedules, schedule)
 	}
 	return schedules, nil

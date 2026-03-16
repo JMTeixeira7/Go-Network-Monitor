@@ -16,11 +16,7 @@ type Inspector interface {
     InspectRequest(req *http.Request) (res bool, reason string)
 }
 
-func UpdateListenerCache(domain string)  {
-    go handler.removeDomainCache(ctx, domain)
-}
-
-func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) error, err error) {
+func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) error, manageCache func(cmd CacheCommand), err error) {
     ctx, cancel := context.WithCancel(context.Background())
 
     handler := &ProxyHandler{Inspector: inspector,
@@ -52,10 +48,17 @@ func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) er
     }()
 
     // return a shutdown function to the caller (controller/main)
-    return func(shutdownCtx context.Context) error {
+    shutdown = func(shutdownCtx context.Context) error {
         err := srv.Shutdown(shutdownCtx)
         cancel()
         return err
-    }, nil
-    //TODO
+    }
+    manageCache = func(cmd CacheCommand) {
+        select {
+        case handler.cacheCmds <- cmd:
+        case <-ctx.Done():
+        }
+    }
+    
+    return shutdown, manageCache, nil
 }

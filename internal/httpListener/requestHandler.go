@@ -86,7 +86,7 @@ func (h *ProxyHandler) PostHandler(w http.ResponseWriter, req *http.Request) {
 	webRequest.Header = req.Header.Clone()
 
 	res, docs := h.Inspector.InspectRequest(webRequest)
-	if res {
+	if !res {
 		fmt.Printf("Scanning results:\n %s\n", docs)
 		return
 	}
@@ -182,20 +182,6 @@ func (h *ProxyHandler) cleanupExpired() {
 	}
 }
 
-func (h *ProxyHandler) startCleanup(ctx context.Context, timer time.Duration) {
-	ticker := time.NewTicker(timer)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			h.cleanupExpired()
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
 func (h *ProxyHandler) applyCacheCommand(cmd CacheCommand) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -205,9 +191,12 @@ func (h *ProxyHandler) applyCacheCommand(cmd CacheCommand) {
 		return
 	}
 
-	for _, domain := range cmd.DeleteDomains {
-		delete(h.cache, domain)
+	if cmd.DeleteDomains != nil {
+		for _, domain := range cmd.DeleteDomains {
+			delete(h.cache, domain)
+		}
 	}
+	fmt.Errorf("Invalid cache command: there is no action mapped to the given command parameters")
 }
 
 func (h *ProxyHandler) startCacheRoutine(ctx context.Context, every time.Duration) {
@@ -222,9 +211,11 @@ func (h *ProxyHandler) startCacheRoutine(ctx context.Context, every time.Duratio
 		case cmd := <-h.cacheCmds:
 			h.applyCacheCommand(cmd)
 
+		
+		case cmd := <-h.cacheCmds:
+			h.applyCacheCommand(cmd)
+
 		case <-ctx.Done():
-			// optional final cleanup before exit
-			h.cleanupExpired()
 			return
 		}
 	}

@@ -33,10 +33,15 @@ func NewBlockedDomainsDBService(db *sql.DB) *BlockUrlDBService {
 
 func (a *BlockActionUrlDBService) BlockUrlDB(ctx context.Context, domain string, schedules []*model.Schedule) error {
 	var db_schedules []dbmodel.Schedule
-	for _, s := range schedules {
-		db_s := toDBSchedule(s)
-		db_schedules = append(db_schedules, db_s)
+	if schedules != nil {
+		for _, s := range schedules {
+			db_s := toDBSchedule(s)
+			db_schedules = append(db_schedules, db_s)
+		}
+	} else {
+		db_schedules = append(db_schedules, toDBSchedule(nil))
 	}
+
 	err := blockUrlTransaction(a.db, ctx, domain, db_schedules)
 	if err != nil {
 		return err
@@ -73,7 +78,7 @@ func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain strin
 	if err != nil {
 		return false, fmt.Errorf("Error while fetching domain %s block schedules: %w", domain, err)
 	}
-	if schedules == nil {
+	if len(schedules) == 0 {
 		return false, nil
 	}
 	blocked = isCurrentlyBlocked(schedules, now, day)

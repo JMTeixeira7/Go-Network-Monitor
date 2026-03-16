@@ -1,4 +1,4 @@
-package typosquattingDBService
+package visitDBService
 
 import (
 	"context"
@@ -11,6 +11,16 @@ import (
 
 type TyposquattingDBService struct{
 	db *sql.DB
+}
+
+type VisitActionDBService struct{
+	db *sql.DB
+}
+
+func NewVisitActionDBService(db *sql.DB) *VisitActionDBService{
+	return &VisitActionDBService{
+		db: db,
+	}
 }
 
 func NewTypoSquattingDBService(db *sql.DB) *TyposquattingDBService{
@@ -31,12 +41,13 @@ func (t *TyposquattingDBService) GetVisitedDomains(ctx context.Context) ([]strin
 	return str_domains, nil
 }
 
-func (t *TyposquattingDBService) PushDomain(ctx context.Context, domain string) error {
+func (v *VisitActionDBService) PushDomain(ctx context.Context, domain string) error {
 	const q = `
 		INSERT INTO visitedDomains (domain, time)
 		VALUES (?, ?)
+		ON DUPLICATE KEY UPDATE time = VALUES(time)
 	`
-	_, err := t.db.ExecContext(ctx, q, domain, time.Now())
+	_, err := v.db.ExecContext(ctx, q, domain, time.Now())
 	if err != nil {
 		return fmt.Errorf("push domain: %w", err)
 	}
