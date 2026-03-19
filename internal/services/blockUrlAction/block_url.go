@@ -58,13 +58,14 @@ func (b *BlockURLService) GetBlockedURL(ctx context.Context, domain string) ([]s
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("Schedules on service: %v\n", schedules)
 	strSchedules, err := schedulesToString(schedules)
 	if err != nil {
 		return nil, fmt.Errorf("Error while parsing schedules to string: %w", err)
 	}
+	fmt.Printf("Schedules on service: (but in string) %v\n", schedules)
 	return strSchedules, nil
 }
-
 
 func parseSchedules(lines []string) ([]*model.Schedule, error) {
 	var schedules []*model.Schedule
@@ -76,35 +77,29 @@ func parseSchedules(lines []string) ([]*model.Schedule, error) {
 		}
 		schedules = append(schedules, schedule)
 	}
+
 	return schedules, nil
 }
 
 func schedulesToString(parsedSchedules []*model.Schedule) ([]string, error) {
 	var decodedSchedules []string
 
-	for i, schedule := range parsedSchedules {
+	for _, schedule := range parsedSchedules {
 		if schedule == nil {
+			decodedSchedules = append(decodedSchedules, "- - -")
 			continue
 		}
 
-		startStr := "-"
-		if schedule.StartTime() != nil {
-			startStr = schedule.StartTime().Format(time.RFC3339)
-		}
-
-		endStr := "-"
-		if schedule.EndTime() != nil {
-			endStr = schedule.EndTime().Format(time.RFC3339)
-		}
+		startStr := schedule.StartTime()
+		endStr := schedule.EndTime()
 
 		weekdayStr := "-"
 		if schedule.Weekday() != nil {
 			weekdayStr = weekdayToString(*schedule.Weekday())
 		}
 
-		line := fmt.Sprintf("%s %s %s\n", startStr, endStr, weekdayStr)
+		line := fmt.Sprintf("%s %s %s", startStr, endStr, weekdayStr)
 		decodedSchedules = append(decodedSchedules, line)
-		_ = i
 	}
 	return decodedSchedules, nil
 }
@@ -113,15 +108,15 @@ func parseScheduleLine(line string) (*model.Schedule, error) {
 	fields := strings.Fields(line)
 
 	if len(fields) != 3 {
-		return nil, fmt.Errorf("schedule must have exactly 3 fields: <timestamp> <timestamp> <weekday>")
+		return nil, fmt.Errorf("schedule must have exactly 3 fields: <start_time> <end_time> <weekday>")
 	}
 
-	startTime, err := parseTimestamp(fields[0])
+	startTime, err := parseClockTime(fields[0])
 	if err != nil {
 		return nil, err
 	}
 
-	endTime, err := parseTimestamp(fields[1])
+	endTime, err := parseClockTime(fields[1])
 	if err != nil {
 		return nil, err
 	}
@@ -192,16 +187,25 @@ func weekdayToString(w time.Weekday) string {
 	}
 }
 
-func parseTimestamp(s string) (*time.Time, error) {
-	const layout = "15:04:05"
-	
+func parseClockTime(s string) (*time.Time, error) {
 	if s == "-" || s == "" {
 		return nil, nil
 	}
-	t, err := time.Parse(layout, s)
-	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp %q: %w", s, err)
+
+	layouts := []string{
+		"15:04:05",
+		"15:04",
 	}
-	fmt.Println(&t)
-	return &t, nil
+
+	var parsed time.Time
+	var err error
+
+	for _, layout := range layouts {
+		parsed, err = time.Parse(layout, s)
+		if err == nil {
+			return &parsed, nil
+		}
+	}
+
+	return nil, fmt.Errorf("invalid clock time %q: expected HH:MM or HH:MM:SS", s)
 }

@@ -62,6 +62,7 @@ func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain stri
 	if err != nil {
 		return nil, fmt.Errorf("Error while fetching domain %s block schedules: %w", domain, err)
 	}
+	fmt.Printf("Schedules on on db service: %v\n", schedules)
 	var model_schedules []*model.Schedule
 	for _, s := range schedules {
 		model_s, err := toModelSchedule(&s)
@@ -70,6 +71,8 @@ func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain stri
 		}
 		model_schedules = append(model_schedules, model_s)
 	}
+	fmt.Printf("Schedules on on db service (but in model format): %v\n", schedules)
+
 	return model_schedules, nil
 }
 
@@ -118,14 +121,14 @@ func blockUrlTransaction(db *sql.DB, ctx context.Context, domain string, schedul
 	const q1 = `
 		INSERT INTO blockedDomains
 		(domain)
-		VALUES
-		(?)
+		VALUES (?)
+		ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)
 	`
 	const q2 = `
 		INSERT INTO schedule
-		(blocked_domain_key, start_time, end_time, weekday)
+		(blocked_domain_key, start_time, end_time, weekday, timezone)
 		VALUES
-		(?, ?, ?, ?)
+		(?, ?, ?, ?, ?)
 	`
 
 	tx, err := db.BeginTx(ctx, nil)
@@ -150,10 +153,13 @@ func blockUrlTransaction(db *sql.DB, ctx context.Context, domain string, schedul
 	}
 	for _, s := range schedules{
 		var weekday_value any
+		var timezone_value any
 		if s.Weekday == nil { weekday_value = nil
 		} else { weekday_value = int(*s.Weekday)}
+		if s.Timezone == nil { timezone_value = nil
+		} else { timezone_value = int(*s.Timezone)}
 
-		_, err := tx.ExecContext(ctx, q2, blocked_domain_key, s.Start_time, s.End_time, weekday_value)
+		_, err := tx.ExecContext(ctx, q2, blocked_domain_key, s.Start_time.String(), s.End_time.String(), weekday_value, timezone_value)
 		if err != nil {
 			return fmt.Errorf("push schedule: %w", err)
 		}
@@ -167,7 +173,7 @@ func blockUrlTransaction(db *sql.DB, ctx context.Context, domain string, schedul
 }
 func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string) (schedules []dbmodel.Schedule, err error) {
 	const q = `
-		SELECT s.start_time, s.end_time, s.weekday
+		SELECT s.start_time, s.end_time, s.weekday, s.timezone
 		FROM blockedDomains b
 		JOIN schedule s ON b.id = s.blocked_domain_key
 		WHERE b.domain = ?
@@ -182,9 +188,28 @@ func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string)
 	var schedule_rows []dbmodel.Schedule
 	for rows.Next() {
 		var s dbmodel.Schedule
-		if err := rows.Scan(&s.Start_time, &s.End_time, &s.Weekday); err != nil {
-			return nil, fmt.Errorf("Fail to scan schedule row: %w", err)
+		var startStr, endStr sql.NullString
+
+		if err := rows.Scan(&startStr, &endStr, &s.Weekday, &s.Timezone); err != nil {
+			return nil, fmt.Errorf("failed to scan schedule row: %w", err)
 		}
+
+		if startStr.Valid {
+			c, err := dbmodel.ParseClockString(startStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("invalid start_time %q: %w", startStr.String, err)
+			}
+			s.Start_time = c
+		}
+
+		if endStr.Valid {
+			c, err := dbmodel.ParseClockString(endStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("invalid end_time %q: %w", endStr.String, err)
+			}
+			s.End_time = c
+		}
+
 		schedule_rows = append(schedule_rows, s)
 	}
 	err = rows.Err()
@@ -213,17 +238,24 @@ func isCurrentlyBlocked(schedules []dbmodel.Schedule, now *time.Time, day *time.
 	return false
 }
 
-func timeslotsIntersect(now *time.Time, min *time.Time, max *time.Time) bool {
+func timeslotsIntersect(now *time.Time, min *dbmodel.Clock, max *dbmodel.Clock) bool {
 	if now == nil || min == nil || max == nil {
 		return true
 	}
-	if max.Before(*min) || max.Equal(*min) {
+
+	nowSec := now.Hour()*3600 + now.Minute()*60 + now.Second()
+	minSec := clockToSeconds(min)
+	maxSec := clockToSeconds(max)
+
+	if maxSec <= minSec {
 		return false
 	}
-	if min.Before(*now) && max.After(*now) {
-		return true
-	}
-	return false
+
+	return nowSec >= minSec && nowSec < maxSec
+}
+
+func clockToSeconds(c *dbmodel.Clock) int {
+	return c.GetHour()*3600 + c.GetMin()*60 + c.GetSeconds()
 }
 
 func toModelSchedule(schedule *dbmodel.Schedule) (*model.Schedule, error) {
@@ -231,11 +263,19 @@ func toModelSchedule(schedule *dbmodel.Schedule) (*model.Schedule, error) {
 		return nil, nil
 	}
 
-	return model.CreateSchedule(
-		schedule.Start_time,
-		schedule.End_time,
+	return model.CreateScheduleFromDB(
+		toModelClock(schedule.Start_time),
+		toModelClock(schedule.End_time),
 		schedule.Weekday,
+		schedule.Timezone,
 	)
+}
+
+func toModelClock(db_clock *dbmodel.Clock) *model.Clock {
+	if db_clock == nil {
+		return nil
+	}
+	return model.CreateClock(db_clock.GetHour(), db_clock.GetMin(), db_clock.GetSeconds())
 }
 
 func toDBSchedule(schedule *model.Schedule) dbmodel.Schedule {
@@ -248,8 +288,16 @@ func toDBSchedule(schedule *model.Schedule) dbmodel.Schedule {
 	}
 
 	return dbmodel.Schedule{
-		Start_time: schedule.StartTime(),
-		End_time:   schedule.EndTime(),
+		Start_time: toDBClock(schedule.StartTime()),
+		End_time:   toDBClock(schedule.EndTime()),
 		Weekday:    schedule.Weekday(),
+		Timezone: 	schedule.Timezone(),
 	}
+}
+
+func toDBClock(model_clock *model.Clock) *dbmodel.Clock {
+	if model_clock == nil {
+		return nil
+	}
+	return dbmodel.CreateClock(model_clock.GetHour(), model_clock.GetMin(), model_clock.GetSeconds())
 }

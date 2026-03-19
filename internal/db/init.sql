@@ -37,7 +37,8 @@ VALUES
 CREATE TABLE blockedDomains (
   id      INT AUTO_INCREMENT NOT NULL,
   domain  VARCHAR(255) NOT NULL,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  UNIQUE(domain)
 );
 
 INSERT INTO blockedDomains
@@ -49,14 +50,16 @@ VALUES
 CREATE TABLE schedule (
   id                  INT AUTO_INCREMENT NOT NULL,
   blocked_domain_key  INT NOT NULL,
-  start_time          TIMESTAMP NULL,
-  end_time            TIMESTAMP NULL,
+  start_time          TIME NULL,
+  end_time            TIME NULL,
   weekday             INT NULL,
+  timezone            INT NULL,
   PRIMARY KEY (id),
   FOREIGN KEY (blocked_domain_key) REFERENCES blockedDomains(id)
 );
 
 INSERT INTO schedule
-  (blocked_domain_key, start_time, end_time, weekday)
+  (blocked_domain_key, start_time, end_time, weekday, timezone)
 VALUES
-  (1, NULL, NULL, NULL);
+  (1, NULL, NULL, NULL, NULL),
+  (2, NULL, NULL, NULL, NULL);
