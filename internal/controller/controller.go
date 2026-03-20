@@ -49,15 +49,14 @@ type VisitActionService interface {
 
 func New(db *sql.DB) *Controller {
 	scans := make([]Scan, 0, 4)
+	actions := map[string]ActionGroup{
+		"block_url_action": blockUrlAction.New(blockUrlDBService.NewBlockActionDomainsDBService(db)),
+		"visit_action": visitAction.New(visitDBService.NewVisitActionDBService(db), phishingDBService.NewPhishingDBService(db)),
+	}
 	scans = append(scans, xssPrevention.New(),
 		blockURL.New(blockUrlDBService.NewBlockedDomainsDBService(db)),
 		typosquatting.New(visitDBService.NewTypoSquattingDBService(db)),
 		phishingPrevention.New(phishingDBService.NewPhishingDBService(db)))
-	actions := map[string]ActionGroup{
-		"block_url_action": blockUrlAction.New(blockUrlDBService.NewBlockActionDomainsDBService(db)),
-		"visit_service": visitAction.New(visitDBService.NewVisitActionDBService(db)),
-	}
-
 	return &Controller{Scans: scans, Actions: actions}
 }
 
@@ -103,8 +102,8 @@ func (c *Controller) DisplayOperations() {
 			if err != nil {
 				return
 			}
-			line = strings.TrimSpace(line)
-			fmt.Printf("Do you wish to set a block schedule for this domain, %s? [Yes/No]\n", line)
+			domain := strings.TrimSpace(strings.ToLower(line))
+			fmt.Printf("Do you wish to set a block schedule for this domain, %s? [Yes/No]\n", domain)
 			response, err := readBinaryResponse(reader)
 			if err != nil {
 				fmt.Print(err)
@@ -125,16 +124,16 @@ func (c *Controller) DisplayOperations() {
 				continue
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			err = blockGroup.BlockUrl(ctx, line, schedules)
+			err = blockGroup.BlockUrl(ctx, domain, schedules)
 			cancel()
 			if err != nil {
 				fmt.Printf("Could not perform your request:\n%s\n", err)
 				continue
 			}
 			if manageCache != nil {
-				manageCache(httplistener.CacheCommand{DeleteDomains: []string{line}})
+				manageCache(httplistener.CacheCommand{DeleteDomains: []string{domain}})
 			}
-			case "3":
+		case "3":
 			fmt.Println("Enter a domain or skip to view all blocked domains:")
 			line, err := reader.ReadString('\n')
 			if err != nil {
@@ -154,7 +153,8 @@ func (c *Controller) DisplayOperations() {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			if line != "\n" {
-				schedules, err := blockGroup.GetBlockedURL(ctx, line)
+				domain := strings.TrimSpace(strings.ToLower(line))
+				schedules, err := blockGroup.GetBlockedURL(ctx, domain)
 				if err != nil {
 					fmt.Printf("Could not perform your request:\n%s\n", err)
 					continue

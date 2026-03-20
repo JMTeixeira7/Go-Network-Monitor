@@ -62,7 +62,6 @@ func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain stri
 	if err != nil {
 		return nil, fmt.Errorf("Error while fetching domain %s block schedules: %w", domain, err)
 	}
-	fmt.Printf("Schedules on on db service: %v\n", schedules)
 	var model_schedules []*model.Schedule
 	for _, s := range schedules {
 		model_s, err := toModelSchedule(&s)
@@ -71,7 +70,6 @@ func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain stri
 		}
 		model_schedules = append(model_schedules, model_s)
 	}
-	fmt.Printf("Schedules on on db service (but in model format): %v\n", schedules)
 
 	return model_schedules, nil
 }
@@ -178,7 +176,6 @@ func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string)
 		JOIN schedule s ON b.id = s.blocked_domain_key
 		WHERE b.domain = ?
 	`
-
 	rows, err := db.QueryContext(ctx, q, domain)
 	if err != nil {
 		return nil, fmt.Errorf("Error while fetching Blocked domain key: %w", err)
@@ -193,7 +190,6 @@ func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string)
 		if err := rows.Scan(&startStr, &endStr, &s.Weekday, &s.Timezone); err != nil {
 			return nil, fmt.Errorf("failed to scan schedule row: %w", err)
 		}
-
 		if startStr.Valid {
 			c, err := dbmodel.ParseClockString(startStr.String)
 			if err != nil {
@@ -201,7 +197,6 @@ func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string)
 			}
 			s.Start_time = c
 		}
-
 		if endStr.Valid {
 			c, err := dbmodel.ParseClockString(endStr.String)
 			if err != nil {
@@ -215,8 +210,7 @@ func fetchBlockedDomainSchedules(db *sql.DB, ctx context.Context, domain string)
 	err = rows.Err()
 	if err != nil {
 		if err == sql.ErrNoRows {
-			fmt.Printf("Blocked_Domain_db_Service: We couldnt find any schedules")
-			return nil, nil	//domain is blocked without explicit schedule
+			return nil, fmt.Errorf("Blocked_Domain_db_Service: We couldnt find any schedules for the given domain")
 		}
 		return nil, fmt.Errorf("Fail iterating rows: %w", err)
 	}

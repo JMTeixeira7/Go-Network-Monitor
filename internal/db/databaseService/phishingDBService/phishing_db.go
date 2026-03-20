@@ -32,7 +32,10 @@ func (p *PhishingDBService) CheckForPhishing(ctx context.Context, cred *model.Cr
 func (p *PhishingDBService) PushCredentials(ctx context.Context, cred *model.Credentials, domain string) error {
 	const q = `
 		INSERT INTO credentials (domain_key, username, fingerprint)
-		VALUES (?, ?, ?)
+		VALUES (?, ?, ?) AS new
+		ON DUPLICATE KEY UPDATE
+			username = new.username,
+			fingerprint = new.fingerprint
 	`
 	
 	domain_key, err := fetchDomainIDInstance(ctx, domain, p.db)
@@ -55,7 +58,6 @@ func fetchPhishingInstance(ctx context.Context, cred *model.Credentials, domain 
 		ORDER BY v.time DESC
 		LIMIT 1;
 	`
-	fmt.Printf("Phishing test attempt-> credntials: %+v", cred)
 	var legitDomain string
 	err := db.QueryRowContext(ctx, q, cred.Username, cred.Fingerprint, domain).Scan(&legitDomain)
 	if err == sql.ErrNoRows {
@@ -77,12 +79,11 @@ func fetchDomainIDInstance(ctx context.Context, domain string, db *sql.DB) (*int
 	`
 	var domain_key int
 	err := db.QueryRowContext(ctx, q, domain).Scan(&domain_key)
-	if err != sql.ErrNoRows {
-		return nil, fmt.Errorf("Could not fetch a domain instance for the given credentials (Unwanted behaviour): %s", domain)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("Could not fetch a domain instance for the given credentials (Unwanted behaviour): %q", domain)
 	}
 	if err != nil {
 		return  nil, err
 	}
 	return &domain_key, nil
-		
 }

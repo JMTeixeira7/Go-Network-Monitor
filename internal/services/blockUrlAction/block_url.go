@@ -58,12 +58,10 @@ func (b *BlockURLService) GetBlockedURL(ctx context.Context, domain string) ([]s
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("Schedules on service: %v\n", schedules)
 	strSchedules, err := schedulesToString(schedules)
 	if err != nil {
 		return nil, fmt.Errorf("Error while parsing schedules to string: %w", err)
 	}
-	fmt.Printf("Schedules on service: (but in string) %v\n", schedules)
 	return strSchedules, nil
 }
 

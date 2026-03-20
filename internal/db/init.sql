@@ -25,14 +25,15 @@ CREATE TABLE credentials (
   username    VARCHAR(255) NOT NULL,
   fingerprint VARCHAR(255) NOT NULL,
   PRIMARY KEY (id),
-  FOREIGN KEY (domain_key) REFERENCES visitedDomains(id)
+  FOREIGN KEY (domain_key) REFERENCES visitedDomains(id),
+  UNIQUE(domain_key)
 );
 
 INSERT INTO credentials
   (domain_key, username, fingerprint)
 VALUES
-  (1, 'user1', 'example1'),
-  (2, 'user2', 'example2');
+  (1, 'user1', 'ae23c8f573d36c7a1d6cbc8b0bebe52e0666dcf14fa04407328fb944b8f7a82d'), /* password = 12345*/
+  (2, 'user2', 'ae23c8f573d36c7a1d6cbc8b0bebe52e0666dcf14fa04407328fb944b8f7a82d');
 
 CREATE TABLE blockedDomains (
   id      INT AUTO_INCREMENT NOT NULL,
