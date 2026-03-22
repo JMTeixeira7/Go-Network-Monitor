@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/blockUrlDBService"
 )
 
 type BlockedListDBService interface {
@@ -17,7 +16,7 @@ type Block struct{
 	db_serivce BlockedListDBService
 }
 
-func New(b *blockUrlDBService.BlockUrlDBService) *Block {
+func New(b BlockedListDBService) *Block {
 	return &Block{
 		db_serivce: b,
 	}

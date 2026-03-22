@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -13,7 +14,7 @@ import (
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/blockUrlDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/phishingDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/visitDBService"
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httpListener"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httplistener"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/blockURL"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/phishingPrevention"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/typosquatting"
@@ -22,45 +23,56 @@ import (
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/services/visitAction"
 )
 
+const (
+	blockURLActionKey = "block_url_action"
+	visitActionKey    = "visit_action"
+)
+
 type Controller struct {
-	Scans   []Scan
-	Actions map[string]ActionGroup
+	scanners []Scanner
+	actions  map[string]ActionGroup
 }
 
-type Scan interface {
-	Scan(r *http.Request) (res bool, reasons []string)
+type Scanner interface {
+	Scan(r *http.Request) (blocked bool, reasons []string)
 }
 
 type ActionGroup interface {
 	Name() string
 }
 
-type BlockActionUrlService interface {
+type BlockActionGroup interface {
 	ActionGroup
 	BlockUrl(ctx context.Context, domain string, schedules []string) error
 	GetAllBlockedURL(ctx context.Context) ([]string, error)
 	GetBlockedURL(ctx context.Context, domain string) ([]string, error)
 }
 
-type VisitActionService interface {
+type VisitActionGroup interface {
 	ActionGroup
 	RegisterVisit(ctx context.Context, req *http.Request) error
 }
 
 func New(db *sql.DB) *Controller {
-	scans := make([]Scan, 0, 4)
-	actions := map[string]ActionGroup{
-		"block_url_action": blockUrlAction.New(blockUrlDBService.NewBlockActionDomainsDBService(db)),
-		"visit_action": visitAction.New(visitDBService.NewVisitActionDBService(db), phishingDBService.NewPhishingDBService(db)),
-	}
-	scans = append(scans, xssPrevention.New(),
+	scanners := []Scanner{
+		xssPrevention.New(),
 		blockURL.New(blockUrlDBService.NewBlockedDomainsDBService(db)),
 		typosquatting.New(visitDBService.NewTypoSquattingDBService(db)),
-		phishingPrevention.New(phishingDBService.NewPhishingDBService(db)))
-	return &Controller{Scans: scans, Actions: actions}
+		phishingPrevention.New(phishingDBService.NewPhishingDBService(db)),
+	}
+
+	actions := map[string]ActionGroup{
+		blockURLActionKey: blockUrlAction.New(blockUrlDBService.NewBlockActionDomainsDBService(db)),
+		visitActionKey:    visitAction.New(visitDBService.NewVisitActionDBService(db), phishingDBService.NewPhishingDBService(db)),
+	}
+
+	return &Controller{
+		scanners: scanners,
+		actions:  actions,
+	}
 }
 
-func (c *Controller) DisplayOperations() {
+func (c *Controller) RunCLI() {
 	reader := bufio.NewReader(os.Stdin)
 
 	var shutdown func(context.Context) error
@@ -68,7 +80,7 @@ func (c *Controller) DisplayOperations() {
 	serverRunning := false
 
 	for {
-		fmt.Printf(
+		fmt.Print(
 			"<1> Passive Scan of Network\n" +
 				"<2> Write block URL's\n" +
 				"<3> Read blocked URL's\n" +
@@ -79,156 +91,174 @@ func (c *Controller) DisplayOperations() {
 
 		line, err := reader.ReadString('\n')
 		if err != nil {
+			log.Printf("failed to read menu option: %v", err)
 			return
 		}
-		choice := strings.TrimSpace(line)
 
-		switch choice {
+		switch strings.TrimSpace(line) {
 		case "1":
 			if serverRunning {
 				fmt.Println("Server already running.")
 				continue
 			}
+
 			shutdown, manageCache, err = httplistener.ScanHTTPNetwork(c)
 			if err != nil {
-				fmt.Printf("Failed to start server: %s\n", err)
+				log.Printf("failed to start server: %v", err)
 				continue
 			}
+
 			serverRunning = true
 			fmt.Println("Server started on 127.0.0.1:4444")
+
 		case "2":
-			fmt.Print("Introduce a domain you which to block with this format: e.g. google.com\n")
-			line, err := reader.ReadString('\n')
+			schedules, domain, err := readBlockInput(reader)
 			if err != nil {
-				return
+				log.Printf("failed to parse block input: %v", err)
+				continue
 			}
-			domain := strings.TrimSpace(strings.ToLower(line))
-			fmt.Printf("Do you wish to set a block schedule for this domain, %s? [Yes/No]\n", domain)
-			response, err := readBinaryResponse(reader)
+
+			blockGroup, err := c.blockActionGroup()
 			if err != nil {
-				fmt.Print(err)
+				log.Printf("failed to get block action group: %v", err)
 				continue
 			}
-			schedules := []string{}
-			if response {
-				schedules, err = readSchedule(reader)
-			}
-			group, ok := c.Actions["block_url_action"]
-			if !ok {
-				fmt.Println("Did not find the Service for the given request")
-				continue
-			}
-			blockGroup, ok := group.(BlockActionUrlService)
-			if !ok {
-				fmt.Println("Did not find the Service for the given request")
-				continue
-			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			err = blockGroup.BlockUrl(ctx, domain, schedules)
 			cancel()
 			if err != nil {
-				fmt.Printf("Could not perform your request:\n%s\n", err)
+				log.Printf("failed to block domain %q: %v", domain, err)
 				continue
 			}
+
 			if manageCache != nil {
 				manageCache(httplistener.CacheCommand{DeleteDomains: []string{domain}})
 			}
+
 		case "3":
 			fmt.Println("Enter a domain or skip to view all blocked domains:")
+
 			line, err := reader.ReadString('\n')
 			if err != nil {
+				log.Printf("failed to read domain input: %v", err)
 				return
 			}
-		
-			group, ok := c.Actions["block_url_action"]
-			if !ok {
-				fmt.Println("Did not find the Service for the given request")
+
+			blockGroup, err := c.blockActionGroup()
+			if err != nil {
+				log.Printf("failed to get block action group: %v", err)
 				continue
 			}
-			blockGroup, ok := group.(BlockActionUrlService)
-			if !ok {
-				fmt.Println("Did not find the Service for the given request")
-				continue
-			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
+
 			if line != "\n" {
 				domain := strings.TrimSpace(strings.ToLower(line))
 				schedules, err := blockGroup.GetBlockedURL(ctx, domain)
+				cancel()
 				if err != nil {
-					fmt.Printf("Could not perform your request:\n%s\n", err)
+					log.Printf("failed to get blocked URL %q: %v", domain, err)
 					continue
 				}
-				fmt.Printf(displaySchedules(schedules))
+				fmt.Print(formatSchedules(schedules))
 			} else {
-				blocked_domains, err := blockGroup.GetAllBlockedURL(ctx)
+				domains, err := blockGroup.GetAllBlockedURL(ctx)
+				cancel()
 				if err != nil {
-					fmt.Printf("Could not perform your request:\n%s\n", err)
+					log.Printf("failed to get blocked URLs: %v", err)
 					continue
 				}
-				fmt.Printf(displayBlockedDomains(blocked_domains))
+				fmt.Print(formatBlockedDomains(domains))
 			}
+
 		case "5":
 			if !serverRunning {
 				fmt.Println("Server not running.")
 				continue
 			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = shutdown(ctx)
+			if err := shutdown(ctx); err != nil {
+				log.Printf("failed to stop server: %v", err)
+			}
 			cancel()
+
 			serverRunning = false
 			fmt.Println("Server stopped.")
+
 		case "6":
 			if !serverRunning {
 				fmt.Println("Server has to be running to clean its cache.")
 				continue
 			}
+
 			manageCache(httplistener.CacheCommand{ClearAll: true})
+
 		default:
 			fmt.Println("Not implemented yet.")
 		}
 	}
 }
 
-// InspectGET implements httplistener.Inspector.
-func (c *Controller) InspectRequest(req *http.Request) (res bool, reason string) {
+func (c *Controller) InspectRequest(req *http.Request) (bool, string) {
 	var reasons []string
-	res = true
-	for _, s := range c.Scans {
-		block, rs := s.Scan(req)
-		reasons = append(reasons, rs...)
-		if block {
-			res = false
+	allowed := true
+
+	for _, scanner := range c.scanners {
+		blocked, scannerReasons := scanner.Scan(req)
+		reasons = append(reasons, scannerReasons...)
+		if blocked {
+			allowed = false
 		}
 	}
-	if res == true {
-		err := c.localVisitSearviceCall(req)
-		if err != nil {
-			fmt.Printf("Error:\n%s\n", err)
+
+	if allowed {
+		if err := c.registerVisit(req); err != nil {
+			log.Printf("failed to register visit: %v", err)
 		}
 	}
-	fmt.Printf("Controller - Scan result: %t Reasons of the stack: %v\n",res, reasons )
-	return res, parseMsg(reasons)
+
+	log.Printf("controller scan result: allowed=%t reasons=%v", allowed, reasons)
+	return allowed, formatScanReasons(reasons)
 }
-func (c *Controller) localVisitSearviceCall(req *http.Request) error{
-	group, ok := c.Actions["visit_action"]
+
+func (c *Controller) registerVisit(req *http.Request) error {
+	group, ok := c.actions[visitActionKey]
 	if !ok {
-		return fmt.Errorf("Did not find the Service for the given request")
+		return fmt.Errorf("visit action group not found")
 	}
-	visitGroup, ok := group.(VisitActionService)
+
+	visitGroup, ok := group.(VisitActionGroup)
 	if !ok {
-		return fmt.Errorf("Did not find the Service for the given request")
+		return fmt.Errorf("invalid visit action group type")
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	err := visitGroup.RegisterVisit(ctx, req)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("Could not perform your request:\n%w\n", err)
+	defer cancel()
+
+	if err := visitGroup.RegisterVisit(ctx, req); err != nil {
+		return fmt.Errorf("register visit: %w", err)
 	}
+
 	return nil
 }
 
-func parseMsg(reasons []string) string {
+func (c *Controller) blockActionGroup() (BlockActionGroup, error) {
+	group, ok := c.actions[blockURLActionKey]
+	if !ok {
+		return nil, fmt.Errorf("block action group not found")
+	}
+
+	blockGroup, ok := group.(BlockActionGroup)
+	if !ok {
+		return nil, fmt.Errorf("invalid block action group type")
+	}
+
+	return blockGroup, nil
+}
+
+func formatScanReasons(reasons []string) string {
 	if len(reasons) == 0 {
 		return "No scan reasons.\n"
 	}
@@ -253,43 +283,74 @@ func parseMsg(reasons []string) string {
 	return b.String()
 }
 
-func readBinaryResponse(reader *bufio.Reader) (bool, error) {
-	for true {
+func readYesNo(reader *bufio.Reader) (bool, error) {
+	for {
 		response, err := reader.ReadString('\n')
 		if err != nil {
-			return false, fmt.Errorf("Failed to read user response, %w", err) 
+			return false, fmt.Errorf("read yes/no response: %w", err)
 		}
+
 		response = strings.ToLower(strings.TrimSpace(response))
-		if response == "y" || response == "yes" {
+		switch response {
+		case "y", "yes":
 			return true, nil
-		}
-		if response == "n" || response == "no" {
+		case "n", "no":
 			return false, nil
+		default:
+			fmt.Print("Please enter [Yes/No]:")
 		}
-		fmt.Print("Please enter [Yes/No]:")
 	}
-	return false, nil
+}
+
+func readBlockInput(reader *bufio.Reader) ([]string, string, error) {
+	fmt.Print("Introduce a domain you which to block with this format: e.g. google.com\n")
+
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, "", fmt.Errorf("read domain input: %w", err)
+	}
+	domain := strings.TrimSpace(strings.ToLower(line))
+
+	fmt.Printf("Do you wish to set a block schedule for this domain, %s? [Yes/No]\n", domain)
+
+	response, err := readYesNo(reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("read schedule confirmation: %w", err)
+	}
+
+	if !response {
+		return nil, domain, nil
+	}
+
+	schedules, err := readSchedule(reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("read schedule input: %w", err)
+	}
+
+	return schedules, domain, nil
 }
 
 func readSchedule(reader *bufio.Reader) ([]string, error) {
 	var schedules []string
+
 	for {
 		fmt.Print("Enter schedule as: <timestamp> <timestamp> <weekday>\nUse - to skip a field. Press Enter on an empty line to finish:\n")
 
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			return nil, fmt.Errorf("failed to read user response: %w", err)
+			return nil, fmt.Errorf("read schedule line: %w", err)
 		}
 
 		line = strings.TrimSpace(line)
 		if line == "" {
 			return schedules, nil
 		}
+
 		schedules = append(schedules, line)
 	}
 }
 
-func displaySchedules(schedules []string) string {
+func formatSchedules(schedules []string) string {
 	if len(schedules) == 0 {
 		return "Schedules: none\n"
 	}
@@ -302,7 +363,7 @@ func displaySchedules(schedules []string) string {
 	return b.String()
 }
 
-func displayBlockedDomains(domains []string) string {
+func formatBlockedDomains(domains []string) string {
 	if len(domains) == 0 {
 		return "Blocked domains: none\n"
 	}

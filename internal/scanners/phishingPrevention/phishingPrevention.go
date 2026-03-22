@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/phishingDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/resources/credentialsParser"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/security"
@@ -21,7 +20,7 @@ type PhishingPrev struct {
 	fp_service *security.Fingerprinter
 }
 
-func New(p *phishingDBService.PhishingDBService) *PhishingPrev{
+func New(p DBService) *PhishingPrev{
 	fp_service := security.NewFingerprinter([]byte(os.Getenv("FINGERPRINT_SEED")))
 	return &PhishingPrev{
 		db_service: p,

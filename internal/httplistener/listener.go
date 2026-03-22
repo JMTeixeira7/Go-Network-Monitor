@@ -19,13 +19,13 @@ type Inspector interface {
 func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) error, manageCache func(cmd CacheCommand), err error) {
     ctx, cancel := context.WithCancel(context.Background())
 
-    handler := &ProxyHandler{Inspector: inspector,
-                             cache: map[string]time.Time{},
-                             cacheTTL: 30*time.Minute.Abs(),
-                             max_tries: 5,
-                             mu: sync.RWMutex{},
-                             cacheCmds: make(chan CacheCommand, 8),
-                            }
+    handler := &Handler{inspector: inspector,
+                        cache: map[string]time.Time{},
+                        cacheTTL: 30*time.Minute.Abs(),
+                        maxRetries: 5,
+                        mu: sync.RWMutex{},
+                        cacheCommands: make(chan CacheCommand, 8),
+                    }
 
     srv := &http.Server{
         Addr:    "127.0.0.1:4444",
@@ -53,9 +53,10 @@ func ScanHTTPNetwork(inspector Inspector) (shutdown func(ctx context.Context) er
         cancel()
         return err
     }
+    // return a management station to the caller (controller/main)
     manageCache = func(cmd CacheCommand) {
         select {
-        case handler.cacheCmds <- cmd:
+        case handler.cacheCommands <- cmd:
         case <-ctx.Done():
         }
     }

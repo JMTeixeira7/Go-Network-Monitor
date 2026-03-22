@@ -6,10 +6,10 @@ import (
 )
 
 type Schedule struct {
-	start_time *Clock
-	end_time   *Clock
-	weekday    *time.Weekday
-	timezone   *int
+	startTime *Clock
+	endTime   *Clock
+	weekday   *time.Weekday
+	timezone  *int
 }
 
 type Clock struct {
@@ -18,17 +18,9 @@ type Clock struct {
 	second int
 }
 
-func CreateSchedule(start_time *time.Time, end_time *time.Time, weekday *time.Weekday) (*Schedule, error) {
-	if start_time == nil && end_time == nil && weekday == nil {
+func CreateSchedule(startTime *time.Time, endTime *time.Time, weekday *time.Weekday) (*Schedule, error) {
+	if startTime == nil && endTime == nil && weekday == nil {
 		return nil, nil
-	}
-
-	if (start_time != nil && end_time == nil) || (start_time == nil && end_time != nil) {
-		return nil, fmt.Errorf("schedule format is wrong: start_time and end_time must both be set or both be nil")
-	}
-
-	if start_time != nil && end_time != nil && end_time.Before(*start_time) {
-		return nil, fmt.Errorf("schedule format is wrong: end_time is before start_time")
 	}
 
 	_, offset := time.Now().Zone()
@@ -38,49 +30,54 @@ func CreateSchedule(start_time *time.Time, end_time *time.Time, weekday *time.We
 		timezone: &offset,
 	}
 
-	if start_time != nil {
-		s.start_time = &Clock{
-			hour:   start_time.Hour(),
-			min:    start_time.Minute(),
-			second: start_time.Second(),
-		}
+	if startTime != nil {
+		s.startTime = clockFromTime(startTime)
 	}
 
-	if end_time != nil {
-		s.end_time = &Clock{
-			hour:   end_time.Hour(),
-			min:    end_time.Minute(),
-			second: end_time.Second(),
-		}
+	if endTime != nil {
+		s.endTime = clockFromTime(endTime)
 	}
 
 	return s, nil
 }
 
-func CreateScheduleFromDB(start_time *Clock, end_time *Clock, weekday *time.Weekday, timezone *int) (*Schedule, error) {
-	if start_time == nil && end_time == nil && weekday == nil && timezone == nil {
+func CreateScheduleFromDB(startTime *Clock, endTime *Clock, weekday *time.Weekday, timezone *int) (*Schedule, error) {
+	if startTime == nil && endTime == nil && weekday == nil && timezone == nil {
 		return nil, nil
 	}
+
 	return &Schedule{
-		start_time: start_time,
-		end_time: end_time,
-		weekday: weekday,
-		timezone: timezone,
+		startTime: startTime,
+		endTime:   endTime,
+		weekday:   weekday,
+		timezone:  timezone,
 	}, nil
 }
 
-func (s *Schedule) StartTime() *Clock {
-	if s == nil || s.start_time == nil {
+func clockFromTime(t *time.Time) *Clock {
+	if t == nil {
 		return nil
 	}
-	return s.start_time
+
+	return &Clock{
+		hour:   t.Hour(),
+		min:    t.Minute(),
+		second: t.Second(),
+	}
+}
+
+func (s *Schedule) StartTime() *Clock {
+	if s == nil {
+		return nil
+	}
+	return s.startTime
 }
 
 func (s *Schedule) EndTime() *Clock {
-	if s == nil || s.end_time == nil {
+	if s == nil {
 		return nil
 	}
-	return s.end_time
+	return s.endTime
 }
 
 func (s *Schedule) Weekday() *time.Weekday {
@@ -104,22 +101,22 @@ func (c *Clock) String() string {
 	return fmt.Sprintf("%02d:%02d:%02d", c.hour, c.min, c.second)
 }
 
-func CreateClock(hour int, min int, seconds int) *Clock {
+func CreateClock(hour int, min int, second int) *Clock {
 	return &Clock{
-		hour: hour,
-		min: min,
-		second: seconds,
+		hour:   hour,
+		min:    min,
+		second: second,
 	}
 }
 
-func (c *Clock) GetHour() int {
+func (c *Clock) Hour() int {
 	return c.hour
 }
 
-func (c *Clock) GetMin() int {
+func (c *Clock) Minute() int {
 	return c.min
 }
 
-func (c *Clock) GetSeconds() int {
+func (c *Clock) Second() int {
 	return c.second
 }

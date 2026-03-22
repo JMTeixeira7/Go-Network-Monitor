@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/visitDBService"
 )
 
 type DBService interface {
@@ -30,7 +28,7 @@ type Typosquatting struct {
 	Checks     []Check
 }
 
-func New(ts *visitDBService.TyposquattingDBService) *Typosquatting {
+func New(ts DBService) *Typosquatting {
 	checks := make([]Check, 0, 3)
 	checks = append(checks, NewAdditionalCharacterCheck())
 	checks = append(checks, NewFewerCharacterCheck())

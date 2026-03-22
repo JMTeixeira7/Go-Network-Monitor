@@ -15,5 +15,5 @@ func main() {
     if err != nil { log.Fatal(err) }
     defer db.Close()
     ctrl := controller.New(db)
-    ctrl.DisplayOperations() // blocks here
+    ctrl.RunCLI()
 }

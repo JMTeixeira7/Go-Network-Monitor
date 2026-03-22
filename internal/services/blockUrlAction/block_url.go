@@ -6,72 +6,70 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/blockUrlDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 )
 
-type BlockActionUrlDBService interface {
+type dbservice interface {
 	BlockUrlDB(ctx context.Context, domain string, schedules []*model.Schedule) error
 	GetAllBlockedURL(ctx context.Context) ([]string, error)
 	GetBlockedURL(ctx context.Context, domain string) ([]*model.Schedule, error)
-
-}
-type BlockURLService struct {
-	db_service  BlockActionUrlDBService
 }
 
-func New(db_service *blockUrlDBService.BlockActionUrlDBService) *BlockURLService {
-	return &BlockURLService{
-		db_service: db_service,
-	}
+type Service struct {
+	dbservice dbservice
 }
 
-func (b *BlockURLService) Name() string {
+func New(dbservice dbservice) *Service {
+	return &Service{dbservice: dbservice}
+}
+
+func (s *Service) Name() string {
 	return "block_url_action"
 }
 
-func (b *BlockURLService) BlockUrl(ctx context.Context, domain string, raw_schedules []string) error {
-	parsed_schedules, err := parseSchedules(raw_schedules)
+func (s *Service) BlockUrl(ctx context.Context, domain string, rawSchedules []string) error {
+	schedules, err := parseScheduleLines(rawSchedules)
 	if err != nil {
-		return fmt.Errorf("Error while parsing the Schedules, %w", err)
+		return fmt.Errorf("parse schedules: %w", err)
 	}
-	err = b.db_service.BlockUrlDB(ctx, domain, parsed_schedules)
-	if err != nil {
-		return err
+
+	if err := s.dbservice.BlockUrlDB(ctx, domain, schedules); err != nil {
+		return fmt.Errorf("store blocked URL: %w", err)
 	}
+
 	return nil
 }
 
-func (b *BlockURLService) GetAllBlockedURL(ctx context.Context) ([]string, error) {
-	blocked_domains, err := b.db_service.GetAllBlockedURL(ctx)
+func (s *Service) GetAllBlockedURL(ctx context.Context) ([]string, error) {
+	domains, err := s.dbservice.GetAllBlockedURL(ctx)
 	if err != nil {
-		return nil, err
-	} else if blocked_domains == nil {
-		fmt.Println("There are no blacklisted domains at the moment")
-		return nil, nil
+		return nil, fmt.Errorf("get all blocked URLs: %w", err)
 	}
-	return blocked_domains, nil
+
+	return domains, nil
 }
 
-func (b *BlockURLService) GetBlockedURL(ctx context.Context, domain string) ([]string, error) {
-	schedules, err := b.db_service.GetBlockedURL(ctx, domain)
+func (s *Service) GetBlockedURL(ctx context.Context, domain string) ([]string, error) {
+	schedules, err := s.dbservice.GetBlockedURL(ctx, domain)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get blocked URL %q: %w", domain, err)
 	}
-	strSchedules, err := schedulesToString(schedules)
+
+	lines, err := formatSchedules(schedules)
 	if err != nil {
-		return nil, fmt.Errorf("Error while parsing schedules to string: %w", err)
+		return nil, fmt.Errorf("format schedules: %w", err)
 	}
-	return strSchedules, nil
+
+	return lines, nil
 }
 
-func parseSchedules(lines []string) ([]*model.Schedule, error) {
-	var schedules []*model.Schedule
+func parseScheduleLines(lines []string) ([]*model.Schedule, error) {
+	schedules := make([]*model.Schedule, 0, len(lines))
 
 	for i, line := range lines {
 		schedule, err := parseScheduleLine(line)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing schedule at line %d: %w", i+1, err)
+			return nil, fmt.Errorf("line %d: %w", i+1, err)
 		}
 		schedules = append(schedules, schedule)
 	}
@@ -79,57 +77,71 @@ func parseSchedules(lines []string) ([]*model.Schedule, error) {
 	return schedules, nil
 }
 
-func schedulesToString(parsedSchedules []*model.Schedule) ([]string, error) {
-	var decodedSchedules []string
-
-	for _, schedule := range parsedSchedules {
-		if schedule == nil {
-			decodedSchedules = append(decodedSchedules, "- - -")
-			continue
-		}
-
-		startStr := schedule.StartTime()
-		endStr := schedule.EndTime()
-
-		weekdayStr := "-"
-		if schedule.Weekday() != nil {
-			weekdayStr = weekdayToString(*schedule.Weekday())
-		}
-
-		line := fmt.Sprintf("%s %s %s", startStr, endStr, weekdayStr)
-		decodedSchedules = append(decodedSchedules, line)
-	}
-	return decodedSchedules, nil
-}
-
 func parseScheduleLine(line string) (*model.Schedule, error) {
 	fields := strings.Fields(line)
-
 	if len(fields) != 3 {
 		return nil, fmt.Errorf("schedule must have exactly 3 fields: <start_time> <end_time> <weekday>")
 	}
 
 	startTime, err := parseClockTime(fields[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse start time: %w", err)
 	}
 
 	endTime, err := parseClockTime(fields[1])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse end time: %w", err)
 	}
 
 	weekday, err := parseWeekday(fields[2])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse weekday: %w", err)
 	}
 
 	schedule, err := model.CreateSchedule(startTime, endTime, weekday)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create schedule: %w", err)
 	}
 
 	return schedule, nil
+}
+
+func formatSchedules(schedules []*model.Schedule) ([]string, error) {
+	lines := make([]string, 0, len(schedules))
+
+	for _, schedule := range schedules {
+		if schedule == nil {
+			lines = append(lines, "- - -")
+			continue
+		}
+
+		start := schedule.StartTime()
+		end := schedule.EndTime()
+
+		weekday := "-"
+		if w := schedule.Weekday(); w != nil {
+			weekday = weekdayToString(*w)
+		}
+
+		lines = append(lines, fmt.Sprintf("%s %s %s", start, end, weekday))
+	}
+
+	return lines, nil
+}
+
+func parseClockTime(s string) (*time.Time, error) {
+	if s == "-" || s == "" {
+		return nil, nil
+	}
+
+	for _, layout := range []string{"15:04:05", "15:04"} {
+		t, err := time.Parse(layout, s)
+		if err == nil {
+			return &t, nil
+		}
+	}
+
+	return nil, fmt.Errorf("invalid clock time %q: expected HH:MM or HH:MM:SS", s)
 }
 
 func parseWeekday(s string) (*time.Weekday, error) {
@@ -160,7 +172,7 @@ func parseWeekday(s string) (*time.Weekday, error) {
 		w := time.Saturday
 		return &w, nil
 	default:
-		return nil, fmt.Errorf("invalid weekday: %s", s)
+		return nil, fmt.Errorf("invalid weekday %q", s)
 	}
 }
 
@@ -183,27 +195,4 @@ func weekdayToString(w time.Weekday) string {
 	default:
 		return "-"
 	}
-}
-
-func parseClockTime(s string) (*time.Time, error) {
-	if s == "-" || s == "" {
-		return nil, nil
-	}
-
-	layouts := []string{
-		"15:04:05",
-		"15:04",
-	}
-
-	var parsed time.Time
-	var err error
-
-	for _, layout := range layouts {
-		parsed, err = time.Parse(layout, s)
-		if err == nil {
-			return &parsed, nil
-		}
-	}
-
-	return nil, fmt.Errorf("invalid clock time %q: expected HH:MM or HH:MM:SS", s)
 }
