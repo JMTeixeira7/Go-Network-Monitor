@@ -73,7 +73,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) error {
 		if !allowed {
 			return &proxyError.HTTPError{
 				Status:  http.StatusForbidden,
-				Message: "request blocked",
+				Message: fmt.Sprintf("Request blocked for security reasons:\n%s", docs),
 				Err:     fmt.Errorf("inspection rejected request: %s", docs),
 			}
 		}
@@ -107,7 +107,7 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) error {
 	if !allowed {
 		return &proxyError.HTTPError{
 			Status:  http.StatusForbidden,
-			Message: "request blocked",
+			Message: fmt.Sprintf("Request blocked for security reasons:\n%s", docs),
 			Err:     fmt.Errorf("inspection rejected request: %s", docs),
 		}
 	}
@@ -168,43 +168,44 @@ func (h *Handler) sendRequest(req *http.Request) (*http.Response, error) {
 	if retries < 1 {
 		retries = 1
 	}
-
 	client := &http.Client{}
 	timeout := 500 * time.Millisecond
-	// Safe retries are only guaranteed when the body can be recreated.
-	canRetry := req.Body == nil || req.GetBody != nil
-
+	var lastErr error
 	for attempt := 1; attempt <= retries; attempt++ {
-		var attemptReq *http.Request
-
+		attemptReq := req
 		if attempt > 1 {
-			if !canRetry {
-				break
-			}
-
-			body, err := req.GetBody()
-			if err != nil {
-				return nil, fmt.Errorf("reset request body for retry: %w", err)
-			}
-
 			attemptReq = req.Clone(req.Context())
-			attemptReq.Body = body
-		}
 
+			switch {
+			case req.Body == nil:
+
+			case req.GetBody != nil:
+				body, err := req.GetBody()
+				if err != nil {
+					return nil, fmt.Errorf("reset request body for retry: %w", err)
+				}
+				attemptReq.Body = body
+
+			default:
+				return nil, fmt.Errorf("request body is not replayable after timeout: %w", lastErr)
+			}
+		}
 		client.Timeout = timeout
 		res, err := client.Do(attemptReq)
 		if err == nil {
 			return res, nil
 		}
+		fmt.Print("FAILED TO SEND REQUEST\n")
+		lastErr = err
 		if !isTimeoutError(err) {
 			return nil, fmt.Errorf("send upstream request: %w", err)
 		}
-		if attempt >= retries {
+		if attempt == retries {
 			return nil, fmt.Errorf("send upstream request after %d attempts: %w", attempt, err)
 		}
-		timeout *= 2 //exponencial backoff
+		timeout *= 2
 	}
-	return nil, fmt.Errorf("request body is not replayable, retry skipped")
+	return nil, fmt.Errorf("send upstream request failed: %w", lastErr)
 }
 
 

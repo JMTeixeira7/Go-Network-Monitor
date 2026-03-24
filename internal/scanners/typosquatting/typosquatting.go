@@ -91,12 +91,10 @@ func (switchCharacter) forgeScanMessage(reqDomain, visitedDomain string) string 
 
 // oneInsertionAway returns true if longer can be made equal to shorter
 // by removing exactly one character from longer.
-// Examples: "google" vs "gooogle" => true
 func oneInsertionAway(shorter, longer string) bool {
 	if len(longer) != len(shorter)+1 {
 		return false
 	}
-
 	i, j := 0, 0
 	skipped := false
 
@@ -113,45 +111,35 @@ func oneInsertionAway(shorter, longer string) bool {
 		skipped = true
 		j++
 	}
-
-	// If we never skipped inside the loop, the "extra" char could be at the end,
-	// which still counts as one insertion.
 	return true
 }
 
 // oneAdjacentSwapAway returns true if a can become b by swapping exactly one
 // pair of adjacent characters.
-// Example: "googel" vs "google" (swap 'e' and 'l') => true
 func oneAdjacentSwapAway(a, b string) bool {
 	if len(a) != len(b) || len(a) < 2 {
 		return false
 	}
-
-	// Find first mismatch
 	i := 0
 	for i < len(a) && a[i] == b[i] {
 		i++
 	}
 	if i == len(a) {
-		return false // identical; not a swap typo
+		return false
 	}
 
-	// i is first mismatch, so we need i+1 to exist for an adjacent swap
 	if i+1 >= len(a) {
 		return false
 	}
 
-	// Check swap at i and i+1
 	if a[i] != b[i+1] || a[i+1] != b[i] {
 		return false
 	}
 
-	// Remaining must match after i+1
 	for k := i + 2; k < len(a); k++ {
 		if a[k] != b[k] {
 			return false
 		}
 	}
-
 	return true
 }

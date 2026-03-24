@@ -109,11 +109,20 @@ func blockURLTransaction(db *sql.DB, ctx context.Context, domain string, schedul
 		ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)
 	`
 	const q2 = `
-		INSERT INTO schedule
+	INSERT INTO schedule
 		(blocked_domain_key, start_time, end_time, weekday, timezone)
-		VALUES
-		(?, ?, ?, ?, ?)
-	`
+	SELECT ?, ?, ?, ?, ?
+	FROM DUAL
+	WHERE NOT EXISTS (
+		SELECT 1
+		FROM schedule
+		WHERE blocked_domain_key = ?
+		  AND start_time <=> ?
+		  AND end_time   <=> ?
+		  AND weekday    <=> ?
+		  AND timezone   <=> ?
+	)
+`
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -140,7 +149,8 @@ func blockURLTransaction(db *sql.DB, ctx context.Context, domain string, schedul
 	for _, schedule := range schedules {
 		start, end, weekday, timezone := schedule.SQLValues()
 
-		_, err := tx.ExecContext(ctx, q2, blockedDomainKey, start, end, weekday, timezone)
+		_, err := tx.ExecContext(ctx, q2, blockedDomainKey, start, end, weekday, timezone,
+								blockedDomainKey, start, end, weekday, timezone)
 		if err != nil {
 			return fmt.Errorf("insert schedule: %w", err)
 		}
