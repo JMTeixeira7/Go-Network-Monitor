@@ -1,18 +1,20 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "netguard",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:8080 && electron . --dev\"",
+    "electron:build": "vite build && electron . ",
+    "electron:package": "vite build && npx @electron/packager . NetGuard --platform=linux --arch=x64 --out=electron-release --overwrite --ignore=node_modules --ignore=^/src --ignore=^/public --ignore=^/electron-release"
   },
   "dependencies": {
+    "@electron/packager": "^19.1.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -45,7 +47,9 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "concurrently": "^9.2.1",
     "date-fns": "^3.6.0",
+    "electron": "^41.0.4",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
@@ -61,11 +65,11 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
+    "wait-on": "^9.0.4",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@playwright/test": "^1.57.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
@@ -79,12 +83,12 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "jsdom": "^20.0.3",
-    "lovable-tagger": "^1.1.13",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19",
     "vitest": "^3.2.4"
-  }
+  },
+  "main": "electron/main.cjs"
 }

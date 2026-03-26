@@ -1,0 +1,128 @@
+# ------------------------------
+# OS / filesystem noise
+# ------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.tmp/
+.cache/
+
+# ------------------------------
+# Editor / IDE
+# ------------------------------
+.vscode/
+.idea/
+*.iml
+
+# ------------------------------
+# Logs
+# ------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------
+# Environment / secrets
+# ------------------------------
+.env
+.env.*
+!.env.example
+
+# ------------------------------
+# Go
+# ------------------------------
+bin/
+dist-go/
+coverage.out
+*.test
+*.prof
+*.pprof
+
+# Optional: ignore compiled binaries if created in repo root/subdirs
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ------------------------------
+# Node / frontend
+# ------------------------------
+node_modules/
+npm-cache/
+.pnpm-store/
+.eslintcache
+*.tsbuildinfo
+
+# Vite / React build outputs
+dist/
+build/
+.out/
+
+# Test coverage
+coverage/
+
+# ------------------------------
+# Electron / desktop packaging
+# ------------------------------
+electron-release/
+release/
+releases/
+packaged/
+package/
+*.AppImage
+*.snap
+*.deb
+*.rpm
+*.asar
+*.blockmap
+
+# Electron builder / packager outputs
+dist-electron/
+electron-dist/
+unpacked/
+*-linux-x64/
+*-win32-x64/
+*-darwin-x64/
+*-darwin-arm64/
+
+# Runtime/package resources often generated in packaged apps
+resources/
+locales/
+
+# Chromium / Electron generated crash or temp files
+crashpad/
+*.pak
+icudtl.dat
+v8_context_snapshot*.bin
+snapshot_blob.bin
+
+# ------------------------------
+# Tailwind / PostCSS generated caches
+# ------------------------------
+.parcel-cache/
+
+# ------------------------------
+# Python / misc tooling (safe to ignore if created)
+# ------------------------------
+__pycache__/
+*.pyc
+
+# ------------------------------
+# Project-specific suggestions
+# Adjust if these folders are source folders in your repo
+# ------------------------------
+frontend/dist/
+frontend/node_modules/
+
+# ------------------------------
+# MySQL / SQLite local db files if any appear during development
+# ------------------------------
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3

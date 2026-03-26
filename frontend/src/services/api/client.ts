@@ -79,7 +79,7 @@ import {
 
 // ── Configuration ───────────────────────────────────────────────────
 // Point this to the Go backend when ready (e.g. "http://localhost:8080/api")
-const API_BASE_URL = "/api";
+const API_BASE_URL = "http://127.0.0.1:8081/api";
 
 // Simulated network latency (remove when using real backend)
 const delay = (ms = 400) => new Promise((r) => setTimeout(r, ms));
@@ -167,9 +167,13 @@ export async function fetchActivity(): Promise<ActivityItem[]> {
 
 /** GET /api/status — polled every 15 seconds */
 export async function fetchSystemStatus(): Promise<SystemStatus> {
-  await delay();
-  // return _get<SystemStatus>("/status");
-  return { ...mockStatus, lastUpdated: new Date().toISOString() };
+  const response = await fetch(`${API_BASE_URL}/status`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch system status: ${response.status}`);
+  }
+
+  return response.json();
 }
 
 /** POST /api/listener/start */

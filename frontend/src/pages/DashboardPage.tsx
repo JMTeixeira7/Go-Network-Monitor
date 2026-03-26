@@ -29,6 +29,7 @@ import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
+
 export default function DashboardPage() {
   const { data, isLoading } = useDashboardSummary();
   const navigate = useNavigate();
