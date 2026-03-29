@@ -31,6 +31,10 @@ const (
 type Controller struct {
 	scanners []Scanner
 	actions  map[string]ActionGroup
+	proxyStatus bool
+	cacheCleared bool
+	shutdown func(context.Context) error
+	manageCache func(httplistener.CacheCommand)
 }
 
 type Scanner interface {
@@ -60,16 +64,85 @@ func New(db *sql.DB) *Controller {
 		typosquatting.New(visitDBService.NewTypoSquattingDBService(db)),
 		phishingPrevention.New(phishingDBService.NewPhishingDBService(db)),
 	}
-
 	actions := map[string]ActionGroup{
 		blockURLActionKey: blockUrlAction.New(blockUrlDBService.NewBlockActionDomainsDBService(db)),
 		visitActionKey:    visitAction.New(visitDBService.NewVisitActionDBService(db), phishingDBService.NewPhishingDBService(db)),
 	}
-
 	return &Controller{
 		scanners: scanners,
 		actions:  actions,
+		proxyStatus: false,
+		shutdown: nil,
+		manageCache: nil,
+
 	}
+}
+
+func (c* Controller) isProxyRunning() bool {
+	return c.proxyStatus
+}
+
+func (c *Controller) isCacheCleared() bool {
+	return c.cacheCleared
+}
+
+func (c *Controller) updateShutdownFunction(shutdown func(context.Context) error) {
+	c.shutdown = shutdown
+}
+
+func (c *Controller) updateCacheFunction(manageCache func(httplistener.CacheCommand)) {
+	c.manageCache = manageCache
+}
+
+func (c* Controller) updateProxyStatus(update bool) {
+	c.proxyStatus = update
+}
+
+func (c* Controller) updateCacheCleared(update bool) {
+	c.cacheCleared = update
+}
+
+func(c *Controller) runProxy() error {
+	shutdown, manageCache, err := httplistener.ScanHTTPNetwork(c)
+	if err != nil {
+		return err
+	}
+	c.updateShutdownFunction(shutdown)
+	c.updateCacheFunction(manageCache)
+	c.updateProxyStatus(true)
+	c.updateCacheCleared(true)
+	fmt.Println("Server started on 127.0.0.1:4444")
+	return nil
+}
+
+func (c* Controller) clearCache(targets []string) error{
+	if c.manageCache == nil {
+		return fmt.Errorf("proxy is offline, or did not start correctly")
+	}
+	if targets == nil{ //clear all
+		c.manageCache(httplistener.CacheCommand{ClearAll: true})
+	} else {
+		c.manageCache(httplistener.CacheCommand{DeleteDomains: targets})
+	}
+	return nil
+}
+
+func (c * Controller) shutdownProxy() error {
+	if c.shutdown == nil {
+		return fmt.Errorf("proxy is offline, or did not start correctly")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	err := c.shutdown(ctx)
+	cancel()
+	if err != nil {
+		return err
+	}
+	c.updateCacheFunction(nil)
+	c.updateShutdownFunction(nil)
+	c.updateProxyStatus(false)
+	c.updateCacheCleared(true)
+	fmt.Println("Server stopped.")
+	return  nil
 }
 
 func (c *Controller) RunCLI() {

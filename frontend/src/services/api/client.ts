@@ -167,37 +167,25 @@ export async function fetchActivity(): Promise<ActivityItem[]> {
 
 /** GET /api/status — polled every 15 seconds */
 export async function fetchSystemStatus(): Promise<SystemStatus> {
-  const response = await fetch(`${API_BASE_URL}/status`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch system status: ${response.status}`);
-  }
-
-  return response.json();
+  return _get<SystemStatus>("/status");
 }
 
 /** POST /api/listener/start */
 export async function startListener(): Promise<ApiResponse<null>> {
-  await delay(800);
-  // return _post<ApiResponse<null>>("/listener/start");
-  mockStatus.listenerRunning = true;
-  return { data: null, success: true, message: "Listener started" };
+  await delay(500);
+  return _post<ApiResponse<null>>("/listener/start");
 }
 
 /** POST /api/listener/stop */
 export async function stopListener(): Promise<ApiResponse<null>> {
   await delay(800);
-  // return _post<ApiResponse<null>>("/listener/stop");
-  mockStatus.listenerRunning = false;
-  return { data: null, success: true, message: "Listener stopped" };
+  return _post<ApiResponse<null>>("/listener/stop");
 }
 
 /** POST /api/cache/clear */
 export async function clearCache(): Promise<ApiResponse<null>> {
   await delay(600);
-  // return _post<ApiResponse<null>>("/cache/clear");
-  mockStatus.cacheStatus = "cleared";
-  return { data: null, success: true, message: "Cache cleared" };
+  return _post<ApiResponse<null>>("/cache/clear");
 }
 
 /** GET /api/visited-hosts (also available via SSE at /api/stream/visited-hosts) */
