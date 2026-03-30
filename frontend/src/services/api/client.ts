@@ -121,32 +121,29 @@ export async function fetchDashboardSummary(): Promise<DashboardSummary> {
 
 /** GET /api/blocked-domains */
 export async function fetchBlockedDomains(): Promise<BlockedDomain[]> {
-  await delay();
-  // return _get<BlockedDomain[]>("/blocked-domains");
-  return [...mockBlockedDomains];
+  return _get<BlockedDomain[]>("/blocked-domains");
 }
 
 /** GET /api/blocked-domains/:domain */
 export async function fetchBlockedDomain(domain: string): Promise<BlockedDomain> {
-  await delay();
-  // return _get<BlockedDomain>(`/blocked-domains/${encodeURIComponent(domain)}`);
-  const found = mockBlockedDomains.find((d) => d.domain === domain);
-  if (!found) throw new Error(`Domain ${domain} not found`);
-  return { ...found };
+  return _get<BlockedDomain>(`/blocked-domains/${encodeURIComponent(domain)}`);
+  //const found = mockBlockedDomains.find((d) => d.domain === domain);
+  //if (!found) throw new Error(`Domain ${domain} not found`);
+  //return { ...found };
 }
 
 /** POST /api/blocked-domains */
 export async function addBlockedDomain(payload: AddBlockedDomainPayload): Promise<ApiResponse<BlockedDomain>> {
   await delay(600);
-  // return _post<ApiResponse<BlockedDomain>>("/blocked-domains", payload);
-  const newDomain: BlockedDomain = {
-    domain: payload.domain,
-    schedulesCount: payload.schedules.length,
-    createdAt: new Date().toISOString(),
-    schedules: payload.schedules.map((s, i) => ({ ...s, id: `new-${i}` })),
-  };
-  mockBlockedDomains.push(newDomain);
-  return { data: newDomain, success: true, message: "Domain added" };
+  return _post<ApiResponse<BlockedDomain>>("/blocked-domains", payload);
+  //const newDomain: BlockedDomain = {
+  //  domain: payload.domain,
+  //  schedulesCount: payload.schedules.length,
+  //  createdAt: new Date().toISOString(),
+  //  schedules: payload.schedules.map((s, i) => ({ ...s, id: `new-${i}` })),
+  //};
+  //mockBlockedDomains.push(newDomain);
+  //return { data: newDomain, success: true, message: "Domain added" };
 }
 
 /** DELETE /api/blocked-domains/:domain */

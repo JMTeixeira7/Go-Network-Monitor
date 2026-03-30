@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller/dto"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/blockUrlDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/phishingDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/visitDBService"
@@ -143,6 +144,97 @@ func (c * Controller) shutdownProxy() error {
 	c.updateCacheCleared(true)
 	fmt.Println("Server stopped.")
 	return  nil
+}
+
+func (c *Controller) fetchBlockedDomains() ([]dto.BlockedDomainResponse, error) {
+	blockGroup, err := c.blockActionGroup()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block action group: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	domains, err := blockGroup.GetAllBlockedURL(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get blocked URLs: %w", err)
+	}
+
+	output := make([]dto.BlockedDomainResponse, 0, len(domains))
+
+	for _, domain := range domains {
+		schedules, err := blockGroup.GetBlockedURL(ctx, domain)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get schedules for url %q: %w", domain, err)
+		}
+
+		output = append(output, dto.BlockedDomainResponse{
+			Domain:         domain,
+			SchedulesCount: len(schedules),
+			CreatedAt:      "",
+			Schedules:      parseScheduleLinesToResponses(schedules),
+		})
+	}
+
+	return output, nil
+}
+
+func (c *Controller) fetchBlockedDomain(domain string) (*dto.BlockedDomainResponse, error) {
+	blockGroup, err := c.blockActionGroup()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block action group: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	schedules, err := blockGroup.GetBlockedURL(ctx, domain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get schedules for url %q: %w", domain, err)
+	}
+
+	blockedDomain := &dto.BlockedDomainResponse{
+		Domain:         domain,
+		SchedulesCount: len(schedules),
+		CreatedAt:      "",
+		Schedules:      parseScheduleLinesToResponses(schedules),
+	}
+
+	return blockedDomain, nil
+}
+
+func (c *Controller) blockDomain(req dto.BlockedDomainRequest) (*dto.BlockedDomainResponse, error) {
+	blockGroup, err := c.blockActionGroup()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block action group: %w", err)
+	}
+
+	domainSchedules, err := mapper.ToDomainSchedules(req)
+	if err != nil {
+		return nil, fmt.Errorf("invalid schedules: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err = blockGroup.BlockURL(ctx, req.Domain, domainSchedules)
+	if err != nil {
+		return nil, fmt.Errorf("failed to block domain: %w", err)
+	}
+
+	if c.manageCache != nil {
+		c.manageCache(httplistener.CacheCommand{
+			DeleteDomains: []string{req.Domain},
+		})
+	}
+	var schedules []dto.ScheduleResponse
+	schedules = dto.RequestToScheduleResponses()
+	return &dto.BlockedDomainResponse{
+		Domain:         req.Domain,
+		SchedulesCount: len(req.Schedules),
+		CreatedAt:      req.CreatedAt,
+		Schedules:      dto.ScheduleRequestToScheduleResponses(req.Schedules),
+	}, nil
 }
 
 func (c *Controller) RunCLI() {
@@ -447,4 +539,36 @@ func formatBlockedDomains(domains []string) string {
 		b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, domain))
 	}
 	return b.String()
+}
+
+func parseSchedules(lines []string) []Schedule {
+	output := make([]Schedule, 0, len(lines))
+
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Fields(line)
+
+		schedule := Schedule{
+			ID: fmt.Sprintf("%d", i+1),
+		}
+
+		if len(parts) > 0 && parts[0] != "-" {
+			schedule.StartTime = parts[0]
+		}
+
+		if len(parts) > 1 && parts[1] != "-" {
+			schedule.EndTime = parts[1]
+		}
+
+		if len(parts) > 2 && parts[2] != "-" {
+			schedule.Weekday = parts[2]
+		}
+
+		output = append(output, schedule)
+	}
+	return output
 }

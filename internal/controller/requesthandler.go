@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -27,6 +29,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/cache/clear", s.handleClearCache)
 	s.mux.HandleFunc("/api/listener/start", s.handleProxyStartUp)
 	s.mux.HandleFunc("/api/listener/stop", s.handleProxyShutdown)
+	s.mux.HandleFunc("/api/blocked-domains", s.handleFetchBlockedDomains)
 }
 
 func (s *Server) Handler() http.Handler {
@@ -37,6 +40,20 @@ type StatusResponse struct {
 	ListenerRunning bool   `json:"listenerRunning"`
 	CacheStatus     string `json:"cacheStatus"`
 	LastUpdated     string `json:"lastUpdated"`
+}
+
+type BlockedDomain struct {
+	Domain         string     `json:"domain"`
+	SchedulesCount int        `json:"schedulesCount"`
+	CreatedAt      string     `json:"createdAt"`
+	Schedules      []Schedule `json:"schedules"`
+}
+
+type Schedule struct {
+	ID        string `json:"id"`
+	StartTime string `json:"startTime"`
+	EndTime   string `json:"endTime"`
+	Weekday   string `json:"weekday"`
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +160,65 @@ func (s *Server) handleProxyShutdown(w http.ResponseWriter, r *http.Request) {
 			"listenerRunning": s.ctrl.isProxyRunning(),
 		},
 	})
+}
+
+func (s *Server) handleFetchBlockedDomains(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		var req BlockedDomain
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"success": false,
+				"message": "invalid JSON body",
+				"data":    nil,
+			})
+		} else {
+			err := s.ctrl.blockDomain(req)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]any{
+					"success": false,
+					"message": "invalid JSON body",
+					"data":    nil,
+				})
+			} else {
+				writeJSON(w, http.StatusBadRequest, map[string]any{
+					"success": true,
+					"message": "domain blocked successfully",
+					"data":    req,
+				})
+			}
+		}
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{
+			"success": false,
+			"message": "method not allowed",
+			"data":    nil,
+		})
+		return
+	}
+
+	prefix := "/api/blocked-domains/"
+	rawDomain := strings.TrimPrefix(r.URL.Path, prefix)
+	if rawDomain == "" {
+		err, response := s.ctrl.fetchBlockedDomains()
+		if err != nil {
+			writeJSON(w, http.StatusOK, response)
+		} else {
+			writeJSON(w, http.StatusInternalServerError, nil)
+		}
+		return
+	} else {
+		domain, err := url.PathUnescape(rawDomain)
+		err, response := s.ctrl.fetchBlockedDomain(domain)
+		if err != nil {
+			writeJSON(w, http.StatusOK, response)
+		} else {
+			writeJSON(w, http.StatusInternalServerError, response)
+		}
+		return
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

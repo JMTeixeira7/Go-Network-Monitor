@@ -5,17 +5,30 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 )
 
 
-func ParseScheduleLines(lines []string) ([]*model.Schedule, error) {
-	schedules := make([]*model.Schedule, 0, len(lines))
+func ParseBlockedDomainSchedules(input controller.BlockedDomain) ([]*model.Schedule, error) {
+	if input.SchedulesCount != 0 && input.SchedulesCount != len(input.Schedules) {
+		return nil, fmt.Errorf(
+			"schedulesCount (%d) does not match schedules length (%d)",
+			input.SchedulesCount,
+			len(input.Schedules),
+		)
+	}
 
-	for i, line := range lines {
-		schedule, err := ParseScheduleLine(line)
+	return ParseSchedules(input.Schedules)
+}
+
+func ParseSchedules(items []controller.Schedule) ([]*model.Schedule, error) {
+	schedules := make([]*model.Schedule, 0, len(items))
+
+	for i, item := range items {
+		schedule, err := ParseSchedule(item)
 		if err != nil {
-			return nil, fmt.Errorf("line %d: %w", i+1, err)
+			return nil, fmt.Errorf("schedule %d: %w", i+1, err)
 		}
 		schedules = append(schedules, schedule)
 	}
@@ -23,23 +36,25 @@ func ParseScheduleLines(lines []string) ([]*model.Schedule, error) {
 	return schedules, nil
 }
 
-func ParseScheduleLine(line string) (*model.Schedule, error) {
-	fields := strings.Fields(line)
-	if len(fields) != 3 {
-		return nil, fmt.Errorf("schedule must have exactly 3 fields: <start_time> <end_time> <weekday>")
+func ParseSchedule(item controller.Schedule) (*model.Schedule, error) {
+	// Optional: treat an empty schedule as nil, similar to "- - -"
+	if strings.TrimSpace(item.StartTime) == "" &&
+		strings.TrimSpace(item.EndTime) == "" &&
+		strings.TrimSpace(item.Weekday) == "" {
+		return nil, nil
 	}
 
-	startTime, err := ParseClockTime(fields[0])
+	startTime, err := ParseClockTime(item.StartTime)
 	if err != nil {
 		return nil, fmt.Errorf("parse start time: %w", err)
 	}
 
-	endTime, err := ParseClockTime(fields[1])
+	endTime, err := ParseClockTime(item.EndTime)
 	if err != nil {
 		return nil, fmt.Errorf("parse end time: %w", err)
 	}
 
-	weekday, err := ParseWeekday(fields[2])
+	weekday, err := ParseWeekday(item.Weekday)
 	if err != nil {
 		return nil, fmt.Errorf("parse weekday: %w", err)
 	}
