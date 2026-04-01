@@ -77,20 +77,72 @@ import {
   mockProxyServices,
 } from "./mock-data";
 
-// ── Configuration ───────────────────────────────────────────────────
+// Configuration
 // Point this to the Go backend when ready (e.g. "http://localhost:8080/api")
 const API_BASE_URL = "http://127.0.0.1:8081/api";
 
 // Simulated network latency (remove when using real backend)
 const delay = (ms = 400) => new Promise((r) => setTimeout(r, ms));
 
-// ── HTTP Helpers ────────────────────────────────────────────────────
+// HTTP Helpers
 // Ready-to-use fetch wrappers. Uncomment the bodies when connecting.
 
+function extractErrorMessage(value: unknown, fallback = "Request failed"): string {
+  if (typeof value === "string" && value.trim()) return value;
+
+  if (typeof value === "object" && value !== null) {
+    const obj = value as Record<string, unknown>;
+
+    if (typeof obj.message === "string" && obj.message.trim()) return obj.message;
+    if (typeof obj.error === "string" && obj.error.trim()) return obj.error;
+  }
+
+  return fallback;
+}
+
+function isApiResponse<T>(value: unknown): value is ApiResponse<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "success" in value &&
+    typeof (value as { success?: unknown }).success === "boolean" &&
+    "data" in value
+  );
+}
+
 async function _get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`);
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const raw = await res.text();
+
+  let parsed: unknown;
+  try {
+    parsed = raw ? JSON.parse(raw) : null;
+  } catch {
+    throw new Error(
+      raw
+        ? `Expected JSON but received: ${raw.slice(0, 200)}`
+        : "Empty response from server"
+    );
+  }
+
+  if (!res.ok) {
+    throw new Error(extractErrorMessage(parsed, `HTTP ${res.status}`));
+  }
+
+  if (isApiResponse<T>(parsed)) {
+    if (!parsed.success) {
+      throw new Error(parsed.message || "Request failed");
+    }
+    return parsed.data;
+  }
+
+  return parsed as T;
 }
 
 async function _post<T>(path: string, body?: unknown): Promise<T> {

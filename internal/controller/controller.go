@@ -7,15 +7,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller/dto"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller/parser"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/blockUrlDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/phishingDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/visitDBService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httplistener"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/blockURL"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/phishingPrevention"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/typosquatting"
@@ -48,9 +49,9 @@ type ActionGroup interface {
 
 type BlockActionGroup interface {
 	ActionGroup
-	BlockUrl(ctx context.Context, domain string, schedules []string) error
+	BlockUrl(ctx context.Context, domain string, scehdules []*model.Schedule) error
 	GetAllBlockedURL(ctx context.Context) ([]string, error)
-	GetBlockedURL(ctx context.Context, domain string) ([]string, error)
+	GetBlockedURL(ctx context.Context, domain string) ([]*model.Schedule, error)
 }
 
 type VisitActionGroup interface {
@@ -172,7 +173,7 @@ func (c *Controller) fetchBlockedDomains() ([]dto.BlockedDomainResponse, error) 
 			Domain:         domain,
 			SchedulesCount: len(schedules),
 			CreatedAt:      "",
-			Schedules:      parseScheduleLinesToResponses(schedules),
+			Schedules:      parser.ToScheduleResponses(schedules),
 		})
 	}
 
@@ -197,7 +198,7 @@ func (c *Controller) fetchBlockedDomain(domain string) (*dto.BlockedDomainRespon
 		Domain:         domain,
 		SchedulesCount: len(schedules),
 		CreatedAt:      "",
-		Schedules:      parseScheduleLinesToResponses(schedules),
+		Schedules:      parser.ToScheduleResponses(schedules),
 	}
 
 	return blockedDomain, nil
@@ -209,7 +210,7 @@ func (c *Controller) blockDomain(req dto.BlockedDomainRequest) (*dto.BlockedDoma
 		return nil, fmt.Errorf("failed to get block action group: %w", err)
 	}
 
-	domainSchedules, err := mapper.ToDomainSchedules(req)
+	domainSchedules, err := parser.ToDomainSchedules(req)
 	if err != nil {
 		return nil, fmt.Errorf("invalid schedules: %w", err)
 	}
@@ -217,7 +218,7 @@ func (c *Controller) blockDomain(req dto.BlockedDomainRequest) (*dto.BlockedDoma
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err = blockGroup.BlockURL(ctx, req.Domain, domainSchedules)
+	err = blockGroup.BlockUrl(ctx, req.Domain, domainSchedules)
 	if err != nil {
 		return nil, fmt.Errorf("failed to block domain: %w", err)
 	}
@@ -227,144 +228,142 @@ func (c *Controller) blockDomain(req dto.BlockedDomainRequest) (*dto.BlockedDoma
 			DeleteDomains: []string{req.Domain},
 		})
 	}
-	var schedules []dto.ScheduleResponse
-	schedules = dto.RequestToScheduleResponses()
 	return &dto.BlockedDomainResponse{
 		Domain:         req.Domain,
 		SchedulesCount: len(req.Schedules),
 		CreatedAt:      req.CreatedAt,
-		Schedules:      dto.ScheduleRequestToScheduleResponses(req.Schedules),
+		Schedules:      parser.ScheduleRequestsToResponses(req.Schedules),
 	}, nil
 }
 
-func (c *Controller) RunCLI() {
-	reader := bufio.NewReader(os.Stdin)
-
-	var shutdown func(context.Context) error
-	var manageCache func(httplistener.CacheCommand)
-	serverRunning := false
-
-	for {
-		fmt.Print(
-			"<1> Passive Scan of Network\n" +
-				"<2> Write block URL's\n" +
-				"<3> Read blocked URL's\n" +
-				"<4> Get History of Visited Domain\n" +
-				"<5> Stop HTTP Server\n" +
-				"<6> Clear session cache\n",
-		)
-
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			log.Printf("failed to read menu option: %v", err)
-			return
-		}
-
-		switch strings.TrimSpace(line) {
-		case "1":
-			if serverRunning {
-				fmt.Println("Server already running.")
-				continue
-			}
-
-			shutdown, manageCache, err = httplistener.ScanHTTPNetwork(c)
-			if err != nil {
-				log.Printf("failed to start server: %v", err)
-				continue
-			}
-
-			serverRunning = true
-			fmt.Println("Server started on 127.0.0.1:4444")
-
-		case "2":
-			schedules, domain, err := readBlockInput(reader)
-			if err != nil {
-				log.Printf("failed to parse block input: %v", err)
-				continue
-			}
-
-			blockGroup, err := c.blockActionGroup()
-			if err != nil {
-				log.Printf("failed to get block action group: %v", err)
-				continue
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			err = blockGroup.BlockUrl(ctx, domain, schedules)
-			cancel()
-			if err != nil {
-				log.Printf("failed to block domain %q: %v", domain, err)
-				continue
-			}
-
-			if manageCache != nil {
-				manageCache(httplistener.CacheCommand{DeleteDomains: []string{domain}})
-			}
-
-		case "3":
-			fmt.Println("Enter a domain or skip to view all blocked domains:")
-
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				log.Printf("failed to read domain input: %v", err)
-				return
-			}
-
-			blockGroup, err := c.blockActionGroup()
-			if err != nil {
-				log.Printf("failed to get block action group: %v", err)
-				continue
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-
-			if line != "\n" {
-				domain := strings.TrimSpace(strings.ToLower(line))
-				schedules, err := blockGroup.GetBlockedURL(ctx, domain)
-				cancel()
-				if err != nil {
-					log.Printf("failed to get blocked URL %q: %v", domain, err)
-					continue
-				}
-				fmt.Print(formatSchedules(schedules))
-			} else {
-				domains, err := blockGroup.GetAllBlockedURL(ctx)
-				cancel()
-				if err != nil {
-					log.Printf("failed to get blocked URLs: %v", err)
-					continue
-				}
-				fmt.Print(formatBlockedDomains(domains))
-			}
-
-		case "5":
-			if !serverRunning {
-				fmt.Println("Server not running.")
-				continue
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			if err := shutdown(ctx); err != nil {
-				log.Printf("failed to stop server: %v", err)
-			}
-			cancel()
-
-			serverRunning = false
-			fmt.Println("Server stopped.")
-
-		case "6":
-			if !serverRunning {
-				fmt.Println("Server has to be running to clean its cache.")
-				continue
-			}
-
-			manageCache(httplistener.CacheCommand{ClearAll: true})
-
-		default:
-			fmt.Println("Not implemented yet.")
-		}
-	}
-}
+//func (c *Controller) RunCLI() {
+//	reader := bufio.NewReader(os.Stdin)
+//
+//	var shutdown func(context.Context) error
+//	var manageCache func(httplistener.CacheCommand)
+//	serverRunning := false
+//
+//	for {
+//		fmt.Print(
+//			"<1> Passive Scan of Network\n" +
+//				"<2> Write block URL's\n" +
+//				"<3> Read blocked URL's\n" +
+//				"<4> Get History of Visited Domain\n" +
+//				"<5> Stop HTTP Server\n" +
+//				"<6> Clear session cache\n",
+//		)
+//
+//		line, err := reader.ReadString('\n')
+//		if err != nil {
+//			log.Printf("failed to read menu option: %v", err)
+//			return
+//		}
+//
+//		switch strings.TrimSpace(line) {
+//		case "1":
+//			if serverRunning {
+//				fmt.Println("Server already running.")
+//				continue
+//			}
+//
+//			shutdown, manageCache, err = httplistener.ScanHTTPNetwork(c)
+//			if err != nil {
+//				log.Printf("failed to start server: %v", err)
+//				continue
+//			}
+//
+//			serverRunning = true
+//			fmt.Println("Server started on 127.0.0.1:4444")
+//
+//		case "2":
+//			schedules, domain, err := readBlockInput(reader)
+//			if err != nil {
+//				log.Printf("failed to parse block input: %v", err)
+//				continue
+//			}
+//
+//			blockGroup, err := c.blockActionGroup()
+//			if err != nil {
+//				log.Printf("failed to get block action group: %v", err)
+//				continue
+//			}
+//
+//			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+//			err = blockGroup.BlockUrl(ctx, domain, schedules)
+//			cancel()
+//			if err != nil {
+//				log.Printf("failed to block domain %q: %v", domain, err)
+//				continue
+//			}
+//
+//			if manageCache != nil {
+//				manageCache(httplistener.CacheCommand{DeleteDomains: []string{domain}})
+//			}
+//
+//		case "3":
+//			fmt.Println("Enter a domain or skip to view all blocked domains:")
+//
+//			line, err := reader.ReadString('\n')
+//			if err != nil {
+//				log.Printf("failed to read domain input: %v", err)
+//				return
+//			}
+//
+//			blockGroup, err := c.blockActionGroup()
+//			if err != nil {
+//				log.Printf("failed to get block action group: %v", err)
+//				continue
+//			}
+//
+//			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+//
+//			if line != "\n" {
+//				domain := strings.TrimSpace(strings.ToLower(line))
+//				schedules, err := blockGroup.GetBlockedURL(ctx, domain)
+//				cancel()
+//				if err != nil {
+//					log.Printf("failed to get blocked URL %q: %v", domain, err)
+//					continue
+//				}
+//				fmt.Print(formatSchedules(schedules))
+//			} else {
+//				domains, err := blockGroup.GetAllBlockedURL(ctx)
+//				cancel()
+//				if err != nil {
+//					log.Printf("failed to get blocked URLs: %v", err)
+//					continue
+//				}
+//				fmt.Print(formatBlockedDomains(domains))
+//			}
+//
+//		case "5":
+//			if !serverRunning {
+//				fmt.Println("Server not running.")
+//				continue
+//			}
+//
+//			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+//			if err := shutdown(ctx); err != nil {
+//				log.Printf("failed to stop server: %v", err)
+//			}
+//			cancel()
+//
+//			serverRunning = false
+//			fmt.Println("Server stopped.")
+//
+//		case "6":
+//			if !serverRunning {
+//				fmt.Println("Server has to be running to clean its cache.")
+//				continue
+//			}
+//
+//			manageCache(httplistener.CacheCommand{ClearAll: true})
+//
+//		default:
+//			fmt.Println("Not implemented yet.")
+//		}
+//	}
+//}
 
 func (c *Controller) InspectRequest(req *http.Request) (bool, string) {
 	var reasons []string
@@ -539,36 +538,4 @@ func formatBlockedDomains(domains []string) string {
 		b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, domain))
 	}
 	return b.String()
-}
-
-func parseSchedules(lines []string) []Schedule {
-	output := make([]Schedule, 0, len(lines))
-
-	for i, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		parts := strings.Fields(line)
-
-		schedule := Schedule{
-			ID: fmt.Sprintf("%d", i+1),
-		}
-
-		if len(parts) > 0 && parts[0] != "-" {
-			schedule.StartTime = parts[0]
-		}
-
-		if len(parts) > 1 && parts[1] != "-" {
-			schedule.EndTime = parts[1]
-		}
-
-		if len(parts) > 2 && parts[2] != "-" {
-			schedule.Weekday = parts[2]
-		}
-
-		output = append(output, schedule)
-	}
-	return output
 }

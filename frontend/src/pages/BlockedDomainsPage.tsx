@@ -100,7 +100,9 @@ export default function BlockedDomainsPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {format(new Date(domain.createdAt), "MMM d, yyyy")}
+                    {domain.createdAt && !Number.isNaN(new Date(domain.createdAt).getTime())
+                      ? format(new Date(domain.createdAt), "MMM d, yyyy")
+                      : "—"}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">

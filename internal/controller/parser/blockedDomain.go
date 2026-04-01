@@ -9,36 +9,9 @@ import (
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 )
 
-func ParseScheduleLinesToResponses(lines []string) []dto.ScheduleResponse {
-	out := make([]dto.ScheduleResponse, 0, len(lines))
-
-	for _, line := range lines {
-		req := parseScheduleLine(line)
-		out = append(out, dto.ScheduleResponse{
-			ID:        "",
-			StartTime: req.StartTime,
-			EndTime:   req.EndTime,
-			Weekday:   req.Weekday,
-		})
-	}
-
-	return out
-}
-
-func ScheduleRequestToScheduleResponses(in []dto.ScheduleRequest) []dto.ScheduleResponse {
-	out := make([]dto.ScheduleResponse, 0, len(in))
-
-	for _, s := range in {
-		out = append(out, dto.ScheduleResponse{
-			ID:        s.ID,
-			StartTime: s.StartTime,
-			EndTime:   s.EndTime,
-			Weekday:   s.Weekday,
-		})
-	}
-
-	return out
-}
+// --------------------
+// Request DTO -> Domain
+// --------------------
 
 func ToDomainSchedules(req dto.BlockedDomainRequest) ([]*model.Schedule, error) {
 	if req.SchedulesCount != 0 && req.SchedulesCount != len(req.Schedules) {
@@ -51,12 +24,12 @@ func ToDomainSchedules(req dto.BlockedDomainRequest) ([]*model.Schedule, error) 
 
 	schedules := make([]*model.Schedule, 0, len(req.Schedules))
 
-	for i, s := range req.Schedules {
-		domainSchedule, err := ToDomainSchedule(s)
+	for i, scheduleReq := range req.Schedules {
+		schedule, err := ToDomainSchedule(scheduleReq)
 		if err != nil {
 			return nil, fmt.Errorf("schedule %d: %w", i+1, err)
 		}
-		schedules = append(schedules, domainSchedule)
+		schedules = append(schedules, schedule)
 	}
 
 	return schedules, nil
@@ -86,8 +59,12 @@ func ToDomainSchedule(req dto.ScheduleRequest) (*model.Schedule, error) {
 	return schedule, nil
 }
 
-func ToScheduleResponse(s *model.Schedule) dto.ScheduleResponse {
-	if s == nil {
+// --------------------
+// Domain -> Response DTO
+// --------------------
+
+func ToScheduleResponse(schedule *model.Schedule) dto.ScheduleResponse {
+	if schedule == nil {
 		return dto.ScheduleResponse{
 			ID:        "",
 			StartTime: "",
@@ -98,30 +75,120 @@ func ToScheduleResponse(s *model.Schedule) dto.ScheduleResponse {
 
 	return dto.ScheduleResponse{
 		ID:        "",
-		StartTime: formatClock(s.StartTime()),
-		EndTime:   formatClock(s.EndTime()),
-		Weekday:   formatWeekday(s.Weekday()),
+		StartTime: formatClock(schedule.StartTime()),
+		EndTime:   formatClock(schedule.EndTime()),
+		Weekday:   formatWeekday(schedule.Weekday()),
 	}
 }
 
 func ToScheduleResponses(schedules []*model.Schedule) []dto.ScheduleResponse {
 	out := make([]dto.ScheduleResponse, 0, len(schedules))
 
-	for _, s := range schedules {
-		out = append(out, ToScheduleResponse(s))
+	for _, schedule := range schedules {
+		out = append(out, ToScheduleResponse(schedule))
 	}
 
 	return out
 }
 
 func ToBlockedDomainResponse(domain string, createdAt time.Time, schedules []*model.Schedule) dto.BlockedDomainResponse {
+	createdAtStr := ""
+	if !createdAt.IsZero() {
+		createdAtStr = createdAt.Format(time.RFC3339)
+	}
+
 	return dto.BlockedDomainResponse{
 		Domain:         domain,
 		SchedulesCount: len(schedules),
-		CreatedAt:      createdAt.Format(time.RFC3339),
+		CreatedAt:      createdAtStr,
 		Schedules:      ToScheduleResponses(schedules),
 	}
 }
+
+// --------------------
+// Request DTO -> Response DTO
+// Useful when controller wants to echo request data back
+// --------------------
+
+func ScheduleRequestToResponse(req dto.ScheduleRequest) dto.ScheduleResponse {
+	return dto.ScheduleResponse{
+		ID:        req.ID,
+		StartTime: req.StartTime,
+		EndTime:   req.EndTime,
+		Weekday:   req.Weekday,
+	}
+}
+
+func ScheduleRequestsToResponses(in []dto.ScheduleRequest) []dto.ScheduleResponse {
+	out := make([]dto.ScheduleResponse, 0, len(in))
+
+	for _, req := range in {
+		out = append(out, ScheduleRequestToResponse(req))
+	}
+
+	return out
+}
+
+func RequestToBlockedDomainResponse(req dto.BlockedDomainRequest) dto.BlockedDomainResponse {
+	return dto.BlockedDomainResponse{
+		Domain:         req.Domain,
+		SchedulesCount: len(req.Schedules),
+		CreatedAt:      req.CreatedAt,
+		Schedules:      ScheduleRequestsToResponses(req.Schedules),
+	}
+}
+
+// --------------------
+// Raw schedule lines -> Response DTO
+// Useful when domain/service still returns []string
+// --------------------
+
+func ScheduleLinesToResponses(lines []string) []dto.ScheduleResponse {
+	out := make([]dto.ScheduleResponse, 0, len(lines))
+
+	for _, line := range lines {
+		out = append(out, ScheduleLineToResponse(line))
+	}
+
+	return out
+}
+
+func ScheduleLineToResponse(line string) dto.ScheduleResponse {
+	req := parseScheduleLine(line)
+	return dto.ScheduleResponse{
+		ID:        "",
+		StartTime: req.StartTime,
+		EndTime:   req.EndTime,
+		Weekday:   req.Weekday,
+	}
+}
+
+func parseScheduleLine(line string) dto.ScheduleRequest {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) != 3 {
+		return dto.ScheduleRequest{
+			ID:        "",
+			StartTime: "",
+			EndTime:   "",
+			Weekday:   "",
+		}
+	}
+
+	startTime := normalizeDashField(fields[0])
+	endTime := normalizeDashField(fields[1])
+	weekday := normalizeDashField(fields[2])
+
+	return dto.ScheduleRequest{
+		ID:        "",
+		StartTime: startTime,
+		EndTime:   endTime,
+		Weekday:   weekday,
+	}
+}
+
+// --------------------
+// Helpers
+// --------------------
 
 func parseClockString(value string) (*time.Time, error) {
 	value = strings.TrimSpace(value)
@@ -150,40 +217,48 @@ func parseWeekdayString(value string) (*time.Weekday, error) {
 		return nil, nil
 	}
 
-	var w time.Weekday
+	var weekday time.Weekday
 
 	switch value {
 	case "sunday", "sun":
-		w = time.Sunday
+		weekday = time.Sunday
 	case "monday", "mon":
-		w = time.Monday
+		weekday = time.Monday
 	case "tuesday", "tue", "tues":
-		w = time.Tuesday
+		weekday = time.Tuesday
 	case "wednesday", "wed":
-		w = time.Wednesday
+		weekday = time.Wednesday
 	case "thursday", "thu", "thurs":
-		w = time.Thursday
+		weekday = time.Thursday
 	case "friday", "fri":
-		w = time.Friday
+		weekday = time.Friday
 	case "saturday", "sat":
-		w = time.Saturday
+		weekday = time.Saturday
 	default:
 		return nil, fmt.Errorf("invalid weekday %q", value)
 	}
 
-	return &w, nil
+	return &weekday, nil
 }
 
-func formatClock(c *model.Clock) string {
-	if c == nil {
+func formatClock(clock *model.Clock) string {
+	if clock == nil {
 		return ""
 	}
-	return c.String()
+	return clock.String()
 }
 
-func formatWeekday(w *time.Weekday) string {
-	if w == nil {
+func formatWeekday(weekday *time.Weekday) string {
+	if weekday == nil {
 		return ""
 	}
-	return strings.ToLower(w.String())
+	return strings.ToLower(weekday.String())
+}
+
+func normalizeDashField(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "-" {
+		return ""
+	}
+	return value
 }

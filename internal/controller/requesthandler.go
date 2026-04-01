@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller/dto"
 )
 
 type Server struct {
@@ -29,6 +31,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/cache/clear", s.handleClearCache)
 	s.mux.HandleFunc("/api/listener/start", s.handleProxyStartUp)
 	s.mux.HandleFunc("/api/listener/stop", s.handleProxyShutdown)
+	s.mux.HandleFunc("/api/blocked-domains/", s.handleFetchBlockedDomain)
 	s.mux.HandleFunc("/api/blocked-domains", s.handleFetchBlockedDomains)
 }
 
@@ -36,25 +39,6 @@ func (s *Server) Handler() http.Handler {
 	return withCORS(s.mux)
 }
 
-type StatusResponse struct {
-	ListenerRunning bool   `json:"listenerRunning"`
-	CacheStatus     string `json:"cacheStatus"`
-	LastUpdated     string `json:"lastUpdated"`
-}
-
-type BlockedDomain struct {
-	Domain         string     `json:"domain"`
-	SchedulesCount int        `json:"schedulesCount"`
-	CreatedAt      string     `json:"createdAt"`
-	Schedules      []Schedule `json:"schedules"`
-}
-
-type Schedule struct {
-	ID        string `json:"id"`
-	StartTime string `json:"startTime"`
-	EndTime   string `json:"endTime"`
-	Weekday   string `json:"weekday"`
-}
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -67,7 +51,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if s.ctrl.isCacheCleared() {
 		cacheStatus = "cleared"
 	}
-	resp := StatusResponse{
+	resp := dto.StatusResponse{
 		ListenerRunning: s.ctrl.isProxyRunning(),
 		CacheStatus:     cacheStatus,
 		LastUpdated:     time.Now().UTC().Format(time.RFC3339),
@@ -77,113 +61,113 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleProxyStartUp(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{
-			"success": false,
-			"message": "method not allowed",
-			"data":    nil,
+		writeJSON(w, http.StatusMethodNotAllowed, dto.ApiResponse[*dto.ListenerStateResponse]{
+			Success: false,
+			Message: "method not allowed",
+			Data:    nil,
 		})
 		return
 	}
 
 	err := s.ctrl.runProxy()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{
-			"success": false,
-			"message": "failed to start proxy",
-			"data":    nil,
+		writeJSON(w, http.StatusInternalServerError, dto.ApiResponse[*dto.ListenerStateResponse]{
+			Success: false,
+			Message: "failed to start proxy",
+			Data:    nil,
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "proxy started successfully",
-		"data": map[string]any{
-			"listenerRunning": s.ctrl.isProxyRunning(),
+	writeJSON(w, http.StatusOK, dto.ApiResponse[*dto.ListenerStateResponse]{
+		Success: true,
+		Message: "proxy started successfully",
+		Data: &dto.ListenerStateResponse{
+			ListenerRunning: s.ctrl.isProxyRunning(),
 		},
 	})
 }
 
 func (s *Server) handleClearCache(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{
-			"success": false,
-			"message": "method not allowed",
-			"data":    nil,
+		writeJSON(w, http.StatusMethodNotAllowed, dto.ApiResponse[*dto.CacheStateResponse]{
+			Success: false,
+			Message: "method not allowed",
+			Data: &dto.CacheStateResponse{},
 		})
 		return
 	}
 
 	err := s.ctrl.clearCache(nil)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{
-			"success": false,
-			"message": "proxy not running or failed to initialize",
-			"data":    nil,
+		writeJSON(w, http.StatusInternalServerError, dto.ApiResponse[*dto.CacheStateResponse]{
+			Success: false,
+			Message: "proxy not running or failed to initialize",
+			Data: &dto.CacheStateResponse{},
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "cache cleaned successfully",
-		"data": map[string]any{
-			"cache cleaned": s.ctrl.isCacheCleared(),
+	writeJSON(w, http.StatusOK, dto.ApiResponse[*dto.CacheStateResponse]{
+		Success: true,
+		Message: "cache cleaned successfully",
+		Data: &dto.CacheStateResponse{
+			CacheCleared: s.ctrl.isCacheCleared(),
 		},
 	})
 }
 
 func (s *Server) handleProxyShutdown(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{
-			"success": false,
-			"message": "method not allowed",
-			"data":    nil,
+		writeJSON(w, http.StatusMethodNotAllowed, dto.ApiResponse[*dto.ListenerStateResponse]{
+			Success: false,
+			Message: "method not allowed",
+			Data: nil,
 		})
 		return
 	}
 
 	err := s.ctrl.shutdownProxy()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{
-			"success": false,
-			"message": "failed to stop proxy",
-			"data":    nil,
+		writeJSON(w, http.StatusInternalServerError, dto.ApiResponse[dto.ListenerStateResponse]{
+			Success: false,
+			Message: "failed to stop proxy",
+			Data:    dto.ListenerStateResponse{},
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "proxy stoped successfully",
-		"data": map[string]any{
-			"listenerRunning": s.ctrl.isProxyRunning(),
+	writeJSON(w, http.StatusOK, dto.ApiResponse[dto.ListenerStateResponse]{
+		Success: true,
+		Message: "proxy stopped successfully",
+		Data: dto.ListenerStateResponse{
+			ListenerRunning: s.ctrl.isProxyRunning(),
 		},
 	})
 }
 
 func (s *Server) handleFetchBlockedDomains(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
-		var req BlockedDomain
+		var req dto.BlockedDomainRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]any{
-				"success": false,
-				"message": "invalid JSON body",
-				"data":    nil,
+			writeJSON(w, http.StatusBadRequest, dto.ApiResponse[*dto.BlockedDomainResponse]{
+				Success: false,
+				Message: "invalid JSON body",
+				Data:    nil,
 			})
 		} else {
-			err := s.ctrl.blockDomain(req)
+			res, err := s.ctrl.blockDomain(req)
 			if err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]any{
-					"success": false,
-					"message": "invalid JSON body",
-					"data":    nil,
+				writeJSON(w, http.StatusInternalServerError, dto.ApiResponse[*dto.BlockedDomainResponse]{
+					Success: false,
+					Message: "failed to fetch blocked domains",
+					Data:    nil,
 				})
 			} else {
-				writeJSON(w, http.StatusBadRequest, map[string]any{
-					"success": true,
-					"message": "domain blocked successfully",
-					"data":    req,
+				writeJSON(w, http.StatusOK, dto.ApiResponse[*dto.BlockedDomainResponse]{
+					Success: true,
+					Message: "domain blocked successfully",
+					Data:    res,
 				})
 			}
 		}
@@ -191,33 +175,71 @@ func (s *Server) handleFetchBlockedDomains(w http.ResponseWriter, r *http.Reques
 	}
 
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{
-			"success": false,
-			"message": "method not allowed",
-			"data":    nil,
+		writeJSON(w, http.StatusMethodNotAllowed, dto.ApiResponse[*dto.BlockedDomainResponse]{
+			Success: false,
+			Message: "method not allowed",
+			Data: nil,
 		})
 		return
 	}
 
+	res, err := s.ctrl.fetchBlockedDomains()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, dto.ApiResponse[[]dto.BlockedDomainResponse]{
+			Success: false,
+			Message: "failed to fetch blocked domains",
+			Data:    res,
+		})
+	} else {
+		writeJSON(w, http.StatusOK, dto.ApiResponse[[]dto.BlockedDomainResponse]{
+			Success: true,
+			Message: "blocked domains fetched successfully",
+			Data:    res,
+		})
+	}
+}
+
+func (s *Server) handleFetchBlockedDomain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, dto.ApiResponse[*dto.BlockedDomainResponse]{
+			Success: false,
+			Message: "method not allowed",
+			Data: nil,
+		})
+		return
+	}
 	prefix := "/api/blocked-domains/"
 	rawDomain := strings.TrimPrefix(r.URL.Path, prefix)
 	if rawDomain == "" {
-		err, response := s.ctrl.fetchBlockedDomains()
-		if err != nil {
-			writeJSON(w, http.StatusOK, response)
-		} else {
-			writeJSON(w, http.StatusInternalServerError, nil)
-		}
+		writeJSON(w, http.StatusBadRequest, dto.ApiResponse[*dto.BlockedDomainResponse]{
+			Success: false,
+			Message: ("bad request: no domain specified"),
+			Data: nil,
+		})
 		return
+	}
+	domain, err := url.PathUnescape(rawDomain)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, dto.ApiResponse[*dto.BlockedDomainResponse]{
+			Success: false,
+			Message: "invalid domain path",
+			Data:    nil,
+		})
+		return
+	}
+	res, err := s.ctrl.fetchBlockedDomain(domain)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, dto.ApiResponse[*dto.BlockedDomainResponse]{
+			Success: false,
+			Message: "failed to fetch blocked domain",
+			Data:    nil,
+		})
 	} else {
-		domain, err := url.PathUnescape(rawDomain)
-		err, response := s.ctrl.fetchBlockedDomain(domain)
-		if err != nil {
-			writeJSON(w, http.StatusOK, response)
-		} else {
-			writeJSON(w, http.StatusInternalServerError, response)
-		}
-		return
+		writeJSON(w, http.StatusOK, dto.ApiResponse[*dto.BlockedDomainResponse]{
+			Success: true,
+			Message: "blocked domain fetched successfully",
+			Data:    res,
+		})
 	}
 }
 
