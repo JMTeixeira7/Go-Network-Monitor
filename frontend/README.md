@@ -114,9 +114,14 @@ See `src/types/index.ts` for all TypeScript interfaces.
 
 ## Running Locally
 
+web dev
 ```bash
 npm install
 npm run dev
 ```
 
-The app runs with mock data out of the box — no backend required for development.
+local app
+```bash
+npm install
+npm run electron-package
+```
