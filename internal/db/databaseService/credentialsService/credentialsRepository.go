@@ -1,4 +1,4 @@
-package phishingDBService
+package credencialRepository
 
 import (
 	"context"
@@ -8,17 +8,17 @@ import (
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 )
 
-type PhishingDBService struct {
+type CredencialRepository struct {
 	db *sql.DB
 }
 
-func NewPhishingDBService(db *sql.DB) *PhishingDBService {
-	return &PhishingDBService{
+func NewCredencialRepository(db *sql.DB) *CredencialRepository {
+	return &CredencialRepository{
 		db: db,
 	}
 }
 
-func (p *PhishingDBService) CheckForPhishing(ctx context.Context, cred *model.Credentials, domain string) (bool, *string, error) {
+func (p *CredencialRepository) CheckForPhishing(ctx context.Context, cred *model.Credentials, domain string) (bool, *string, error) {
 	phishing, err := fetchPhishingInstance(ctx, cred, domain, p.db)
 	if err != nil {
 		return false, nil, fmt.Errorf("Failed to fetch credentials instance from database: %s", err)
@@ -29,7 +29,7 @@ func (p *PhishingDBService) CheckForPhishing(ctx context.Context, cred *model.Cr
 	return false, nil, nil
 }
 
-func (p *PhishingDBService) PushCredentials(ctx context.Context, cred *model.Credentials, domain string) error {
+func (p *CredencialRepository) PushCredentials(ctx context.Context, cred *model.Credentials, domain string) error {
 	const q = `
 		INSERT INTO credentials (domain_key, username, fingerprint)
 		VALUES (?, ?, ?) AS new

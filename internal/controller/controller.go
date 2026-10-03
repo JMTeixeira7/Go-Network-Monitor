@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"strconv"
 
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller/dto"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller/parser"
@@ -57,18 +58,19 @@ type BlockActionGroup interface {
 type VisitActionGroup interface {
 	ActionGroup
 	RegisterVisit(ctx context.Context, req *http.Request) error
+	FetchVisitedDomains(limit *string, offset *string) (*[]string, error)
 }
 
 func New(db *sql.DB) *Controller {
 	scanners := []Scanner{
 		xssPrevention.New(),
-		blockURL.New(blockUrlDBService.NewBlockedDomainsDBService(db)),
-		typosquatting.New(visitDBService.NewTypoSquattingDBService(db)),
-		phishingPrevention.New(phishingDBService.NewPhishingDBService(db)),
+		blockURL.New(blockRepository.NewBlockRepository(db)),
+		typosquatting.New(visitRepository.NewVisitRepository(db)),
+		phishingPrevention.New(credencialRepository.NewCredencialRepository(db)),
 	}
 	actions := map[string]ActionGroup{
-		blockURLActionKey: blockUrlAction.New(blockUrlDBService.NewBlockActionDomainsDBService(db)),
-		visitActionKey:    visitAction.New(visitDBService.NewVisitActionDBService(db), phishingDBService.NewPhishingDBService(db)),
+		blockURLActionKey: blockUrlAction.New(blockRepository.NewBlockRepository(db)),
+		visitActionKey:    visitAction.New(visitRepository.NewVisitRepository(db), credencialRepository.NewCredencialRepository(db)),
 	}
 	return &Controller{
 		scanners: scanners,
@@ -234,6 +236,34 @@ func (c *Controller) blockDomain(req dto.BlockedDomainRequest) (*dto.BlockedDoma
 		CreatedAt:      req.CreatedAt,
 		Schedules:      parser.ScheduleRequestsToResponses(req.Schedules),
 	}, nil
+}
+
+func (c *Controller) fetchVisitedDomains(req dto.VisitedDomainRequest) (*dto.BlockedDomainResponse, error) {
+	group, ok := c.actions[visitActionKey]
+	if !ok {
+		return nil, fmt.Errorf("visit action group not found")
+	}
+
+	visitGroup, ok := group.(VisitActionGroup)
+	if !ok {
+		return nil, fmt.Errorf("invalid visit action group type")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if limit, err := strconv.Atoi(req.Limit); err != nil {
+		return nil, fmt.Errorf("Invalid input: %w", err)
+	}
+	if offset, err := strconv.Atoi(req.Offset); err != nil {
+		return nil, fmt.Errorf("Invalid input: %w", err)
+	}
+
+	visitedDomains, err := visitGroup.FetchVisitedDomains(ctx, &limit, &offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch visited domains: %w", err)
+	}
+	return &dto.VisitedDomainResponse{VisitedDomains: visitedDomains}, nil
 }
 
 //func (c *Controller) RunCLI() {

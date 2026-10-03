@@ -1,4 +1,4 @@
-package visitDBService
+package visitRepository
 
 import (
 	"context"
@@ -9,39 +9,26 @@ import (
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/dbmodel"
 )
 
-type TyposquattingDBService struct{
+type VisitRepository struct{
 	db *sql.DB
 }
 
-type VisitActionDBService struct{
-	db *sql.DB
-}
-
-func NewVisitActionDBService(db *sql.DB) *VisitActionDBService{
-	return &VisitActionDBService{
+func NewVisitRepository(db *sql.DB) *VisitRepository{
+	return &VisitRepository{
 		db: db,
 	}
 }
 
-func NewTypoSquattingDBService(db *sql.DB) *TyposquattingDBService{
-	return &TyposquattingDBService{
-		db: db,
-	}
-}
-
-func (t *TyposquattingDBService) GetVisitedDomains(ctx context.Context) ([]string, error) {
-	domains, err := fetchDomains(t.db, ctx)
+func (v *VisitRepository) GetVisitedDomains(ctx context.Context) ([]dbmodel.Domain, error) {
+	domains, err := fetchDomains(v.db, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to fetch domains from database: %s", err)
 	}
-	str_domains := []string{}
-	for i := 0; i < len(domains); i++ {
-		str_domains = append(str_domains, domains[i].Domain)
-	}
-	return str_domains, nil
+	
+	return domains, nil
 }
 
-func (v *VisitActionDBService) PushDomain(ctx context.Context, domain string) error {
+func (v *VisitRepository) PushDomain(ctx context.Context, domain string) error {
 	const q = `
 		INSERT INTO visitedDomains (domain, time)
 		VALUES (?, ?)

@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/dbmodel"
 )
 
 type DBService interface {
-	GetVisitedDomains(ctx context.Context) ([]string, error)
+	GetVisitedDomains(ctx context.Context) ([]dbmodel.Domain, error)
 }
 
 type Check interface {
@@ -47,11 +49,16 @@ func (t *Typosquatting) Scan(req *http.Request) (res bool, reasons []string) {
 		return false, nil
 	}
 
-	for i := 0; i < len(visitedDomains); i++ {
+	str_domains := []string{}
+	for i := range visitedDomains {
+		str_domains = append(str_domains, visitedDomains[i].Domain)
+	}
+
+	for i := range visitedDomains {
 		for j := 0; j < len(t.Checks); j++ {
-			res = t.Checks[j].check(req.URL.Hostname(), visitedDomains[i])
+			res = t.Checks[j].check(req.URL.Hostname(), str_domains[i])
 			if res {
-				reasons = append(reasons, t.Checks[j].forgeScanMessage(req.URL.Hostname(), visitedDomains[i]))
+				reasons = append(reasons, t.Checks[j].forgeScanMessage(req.URL.Hostname(), str_domains[i]))
 				return true, reasons
 			}
 		}

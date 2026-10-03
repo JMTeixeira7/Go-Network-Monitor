@@ -33,6 +33,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/listener/stop", s.handleProxyShutdown)
 	s.mux.HandleFunc("/api/blocked-domains/", s.handleFetchBlockedDomain)
 	s.mux.HandleFunc("/api/blocked-domains", s.handleFetchBlockedDomains)
+	s.mux.HandleFunc("/api/visited-domains", s.handleFetchVisitedDomains)
 }
 
 func (s *Server) Handler() http.Handler {
@@ -238,6 +239,37 @@ func (s *Server) handleFetchBlockedDomain(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusOK, dto.ApiResponse[*dto.BlockedDomainResponse]{
 			Success: true,
 			Message: "blocked domain fetched successfully",
+			Data:    res,
+		})
+	}
+}
+
+func (s *Server) handleFetchVisitedDomains(w http.ResponseWriter, r *http.Request){
+	
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, dto.ApiResponse[*dto.VisitedDomainResponse]{
+			Success: false,
+			Message: "method not allowed",
+			Data: nil,
+		})
+		return
+	}
+
+	req := dto.VisitedDomainRequest{
+		Offset: r.URL.Query().Get(Offset),
+		Limit: r.URL.Query().Get(Limit),
+	}
+	res, err := s.ctrl.fetchVisitedDomains(req)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, dto.ApiResponse[[]dto.VisitedDomainResponse]{
+			Success: false,
+			Message: "failed to fetch blocked domains",
+			Data:    res,
+		})
+	} else {
+		writeJSON(w, http.StatusOK, dto.ApiResponse[[]dto.VisitedDomainResponse]{
+			Success: true,
+			Message: "blocked domains fetched successfully",
 			Data:    res,
 		})
 	}

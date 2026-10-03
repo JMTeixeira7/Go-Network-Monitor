@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/dbmodel"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/resources/credentialsParser"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/security"
@@ -14,6 +15,7 @@ import (
 
 type visitStore interface {
 	PushDomain(ctx context.Context, domain string) error
+	GetVisitedDomains(ctx context.Context) (dbmodel.Domain, error)
 }
 
 type credentialsStore interface {
@@ -93,4 +95,8 @@ func (s *Service) extractCredentials(req *http.Request) (*model.Credentials, err
 	}
 
 	return model.CreateCredentials(email, username, password, s.fingerprinter), nil
+}
+
+func (s *Service) FetchVisitedDomains(limit *string, offset *string) (*[]model.Domain, error) {
+	domains =
 }

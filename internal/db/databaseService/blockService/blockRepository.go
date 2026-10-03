@@ -1,4 +1,4 @@
-package blockUrlDBService
+package blockRepository
 
 import (
 	"context"
@@ -10,23 +10,15 @@ import (
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 )
 
-type BlockUrlDBService struct {
+type BlockRepository struct {
 	db *sql.DB
 }
 
-type BlockActionUrlDBService struct {
-	db *sql.DB
+func NewBlockRepository(db *sql.DB) *BlockRepository {
+	return &BlockRepository{db: db}
 }
 
-func NewBlockActionDomainsDBService(db *sql.DB) *BlockActionUrlDBService {
-	return &BlockActionUrlDBService{db: db}
-}
-
-func NewBlockedDomainsDBService(db *sql.DB) *BlockUrlDBService {
-	return &BlockUrlDBService{db: db}
-}
-
-func (a *BlockActionUrlDBService) BlockUrlDB(ctx context.Context, domain string, schedules []*model.Schedule) error {
+func (a *BlockRepository) BlockUrlDB(ctx context.Context, domain string, schedules []*model.Schedule) error {
 	dbSchedules, err := toDBSchedules(schedules)
 	if err != nil {
 		return fmt.Errorf("convert schedules for domain %q: %w", domain, err)
@@ -39,7 +31,7 @@ func (a *BlockActionUrlDBService) BlockUrlDB(ctx context.Context, domain string,
 	return nil
 }
 
-func (a *BlockActionUrlDBService) GetAllBlockedURL(ctx context.Context) ([]string, error) {
+func (a *BlockRepository) GetAllBlockedURL(ctx context.Context) ([]string, error) {
 	domains, err := fetchBlockedDomains(a.db, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch blocked domains: %w", err)
@@ -47,7 +39,7 @@ func (a *BlockActionUrlDBService) GetAllBlockedURL(ctx context.Context) ([]strin
 	return domains, nil
 }
 
-func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain string) ([]*model.Schedule, error) {
+func (a *BlockRepository) GetBlockedURL(ctx context.Context, domain string) ([]*model.Schedule, error) {
 	dbSchedules, err := fetchBlockedDomainSchedules(a.db, ctx, domain)
 	if err != nil {
 		return nil, fmt.Errorf("fetch schedules for domain %q: %w", domain, err)
@@ -61,7 +53,7 @@ func (a *BlockActionUrlDBService) GetBlockedURL(ctx context.Context, domain stri
 	return modelSchedules, nil
 }
 
-func (b *BlockUrlDBService) IsDomainBlockedNow(ctx context.Context, domain string, now *time.Time, day *time.Weekday) (bool, error) {
+func (b *BlockRepository) IsDomainBlockedNow(ctx context.Context, domain string, now *time.Time, day *time.Weekday) (bool, error) {
 	dbSchedules, err := fetchBlockedDomainSchedules(b.db, ctx, domain)
 	if err != nil {
 		return false, fmt.Errorf("fetch schedules for domain %q: %w", domain, err)
