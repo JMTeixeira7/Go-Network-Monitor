@@ -63,6 +63,29 @@ func ToDomainSchedule(req dto.ScheduleRequest) (*model.Schedule, error) {
 // Domain -> Response DTO
 // --------------------
 
+func ToVisitedDomain(domain model.Domain) dto.Domain {
+	visitedAt := ""
+	if !domain.Time.IsZero() {
+		visitedAt = domain.Time.Format(time.RFC3339)
+	}
+
+	return dto.Domain{
+		Domain: domain.Domain,
+		Time:   visitedAt,
+	}
+}
+
+func ToVisitedDomainResponse(domains []model.Domain) dto.VisitedDomainResponse {
+	visitedDomains := make([]dto.Domain, 0, len(domains))
+	for _, domain := range domains {
+		visitedDomains = append(visitedDomains, ToVisitedDomain(domain))
+	}
+
+	return dto.VisitedDomainResponse{
+		VisitedDomains: visitedDomains,
+	}
+}
+
 func ToScheduleResponse(schedule *model.Schedule) dto.ScheduleResponse {
 	if schedule == nil {
 		return dto.ScheduleResponse{

@@ -259,6 +259,7 @@ func (s *Server) handleFetchVisitedDomains(w http.ResponseWriter, r *http.Reques
 		Offset: r.URL.Query().Get(Offset),
 		Limit: r.URL.Query().Get(Limit),
 	}
+
 	res, err := s.ctrl.fetchVisitedDomains(req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, dto.ApiResponse[[]dto.VisitedDomainResponse]{

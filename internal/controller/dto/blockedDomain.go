@@ -20,6 +20,20 @@ type CacheStateResponse struct {
 	CacheCleared bool `json:"cacheCleared"`
 }
 
+type VisitedDomainRequest struct {
+	Offset string `json:"offset"`
+	Limit string `json:"limit"`
+}
+
+type VisitedDomainResponse struct {
+	VisitedDomains []Domain `json:"VisitedDomains"`
+}
+
+type Domain struct{
+	Domain string `json:"Domain"`
+	Time string `json:"Time"` 
+}
+
 type BlockedDomainRequest struct {
 	Domain         string            `json:"domain"`
 	SchedulesCount int               `json:"schedulesCount"`

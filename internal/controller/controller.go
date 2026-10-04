@@ -7,15 +7,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller/dto"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/controller/parser"
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/blockUrlDBService"
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/phishingDBService"
-	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/visitDBService"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/blockService"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/credentialsService"
+	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/db/databaseService/visitService"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/httplistener"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/model"
 	"github.com/JMTeixeira7/Go-Network-Monitor.git/internal/scanners/blockURL"
@@ -32,12 +32,12 @@ const (
 )
 
 type Controller struct {
-	scanners []Scanner
-	actions  map[string]ActionGroup
-	proxyStatus bool
+	scanners     []Scanner
+	actions      map[string]ActionGroup
+	proxyStatus  bool
 	cacheCleared bool
-	shutdown func(context.Context) error
-	manageCache func(httplistener.CacheCommand)
+	shutdown     func(context.Context) error
+	manageCache  func(httplistener.CacheCommand)
 }
 
 type Scanner interface {
@@ -58,7 +58,7 @@ type BlockActionGroup interface {
 type VisitActionGroup interface {
 	ActionGroup
 	RegisterVisit(ctx context.Context, req *http.Request) error
-	FetchVisitedDomains(limit *string, offset *string) (*[]string, error)
+	FetchVisitedDomains(ctx context.Context, limit int, offset int) ([]model.Domain, error)
 }
 
 func New(db *sql.DB) *Controller {
@@ -73,16 +73,15 @@ func New(db *sql.DB) *Controller {
 		visitActionKey:    visitAction.New(visitRepository.NewVisitRepository(db), credencialRepository.NewCredencialRepository(db)),
 	}
 	return &Controller{
-		scanners: scanners,
-		actions:  actions,
+		scanners:    scanners,
+		actions:     actions,
 		proxyStatus: false,
-		shutdown: nil,
+		shutdown:    nil,
 		manageCache: nil,
-
 	}
 }
 
-func (c* Controller) isProxyRunning() bool {
+func (c *Controller) isProxyRunning() bool {
 	return c.proxyStatus
 }
 
@@ -98,15 +97,15 @@ func (c *Controller) updateCacheFunction(manageCache func(httplistener.CacheComm
 	c.manageCache = manageCache
 }
 
-func (c* Controller) updateProxyStatus(update bool) {
+func (c *Controller) updateProxyStatus(update bool) {
 	c.proxyStatus = update
 }
 
-func (c* Controller) updateCacheCleared(update bool) {
+func (c *Controller) updateCacheCleared(update bool) {
 	c.cacheCleared = update
 }
 
-func(c *Controller) runProxy() error {
+func (c *Controller) runProxy() error {
 	shutdown, manageCache, err := httplistener.ScanHTTPNetwork(c)
 	if err != nil {
 		return err
@@ -119,11 +118,11 @@ func(c *Controller) runProxy() error {
 	return nil
 }
 
-func (c* Controller) clearCache(targets []string) error{
+func (c *Controller) clearCache(targets []string) error {
 	if c.manageCache == nil {
 		return fmt.Errorf("proxy is offline, or did not start correctly")
 	}
-	if targets == nil{ //clear all
+	if targets == nil { //clear all
 		c.manageCache(httplistener.CacheCommand{ClearAll: true})
 	} else {
 		c.manageCache(httplistener.CacheCommand{DeleteDomains: targets})
@@ -131,7 +130,7 @@ func (c* Controller) clearCache(targets []string) error{
 	return nil
 }
 
-func (c * Controller) shutdownProxy() error {
+func (c *Controller) shutdownProxy() error {
 	if c.shutdown == nil {
 		return fmt.Errorf("proxy is offline, or did not start correctly")
 	}
@@ -146,7 +145,7 @@ func (c * Controller) shutdownProxy() error {
 	c.updateProxyStatus(false)
 	c.updateCacheCleared(true)
 	fmt.Println("Server stopped.")
-	return  nil
+	return nil
 }
 
 func (c *Controller) fetchBlockedDomains() ([]dto.BlockedDomainResponse, error) {
@@ -238,7 +237,7 @@ func (c *Controller) blockDomain(req dto.BlockedDomainRequest) (*dto.BlockedDoma
 	}, nil
 }
 
-func (c *Controller) fetchVisitedDomains(req dto.VisitedDomainRequest) (*dto.BlockedDomainResponse, error) {
+func (c *Controller) fetchVisitedDomains(req dto.VisitedDomainRequest) (*dto.VisitedDomainResponse, error) {
 	group, ok := c.actions[visitActionKey]
 	if !ok {
 		return nil, fmt.Errorf("visit action group not found")
@@ -252,18 +251,22 @@ func (c *Controller) fetchVisitedDomains(req dto.VisitedDomainRequest) (*dto.Blo
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if limit, err := strconv.Atoi(req.Limit); err != nil {
+	limit, err := strconv.Atoi(req.Limit)
+	if err != nil {
 		return nil, fmt.Errorf("Invalid input: %w", err)
 	}
-	if offset, err := strconv.Atoi(req.Offset); err != nil {
+	offset, err := strconv.Atoi(req.Offset)
+	if err != nil {
 		return nil, fmt.Errorf("Invalid input: %w", err)
 	}
 
-	visitedDomains, err := visitGroup.FetchVisitedDomains(ctx, &limit, &offset)
+	visitedDomains, err := visitGroup.FetchVisitedDomains(ctx, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch visited domains: %w", err)
 	}
-	return &dto.VisitedDomainResponse{VisitedDomains: visitedDomains}, nil
+
+	response := parser.ToVisitedDomainResponse(visitedDomains)
+	return &response, nil
 }
 
 //func (c *Controller) RunCLI() {

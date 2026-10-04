@@ -15,7 +15,8 @@ import (
 
 type visitStore interface {
 	PushDomain(ctx context.Context, domain string) error
-	GetVisitedDomains(ctx context.Context) (dbmodel.Domain, error)
+	GetVisitedDomains(ctx context.Context, limit int, offset int) ([]dbmodel.Domain, error)
+	
 }
 
 type credentialsStore interface {
@@ -97,6 +98,15 @@ func (s *Service) extractCredentials(req *http.Request) (*model.Credentials, err
 	return model.CreateCredentials(email, username, password, s.fingerprinter), nil
 }
 
-func (s *Service) FetchVisitedDomains(limit *string, offset *string) (*[]model.Domain, error) {
-	domains =
+func (s *Service) FetchVisitedDomains(ctx context.Context, limit int, offset int) ([]model.Domain, error) {
+	domains_db, err := s.visitStore.GetVisitedDomains(ctx, offset, limit)
+	if err != nil{
+		return nil, fmt.Errorf("Error fetching domains from visitRepository: %w", err)
+	}
+
+	domains_model := model.CreateDomainsFromDBDomains(domains_db)
+	if domains_db != nil {
+		return nil, nil
+	}
+	return domains_model, nil
 }
